@@ -1,0 +1,155 @@
+// Paxo API 프록시 (Vercel 버전) — 미국 리전(iad1) 고정 실행으로
+// Gemini "User location is not supported" 문제를 회피한다.
+//
+// 방어 계층:
+//  1) 앱 토큰(x-paxo-token) — APP_TOKEN 설정 시 강제, APP_TOKEN_PREV로 무중단 로테이션
+//  2) 기기 ID(x-paxo-device) UUID 형식 필수 + 베스트에포트 인메모리 일일 제한
+//  3) 본문 "재구성" 검증 — 화이트리스트 필드만으로 새 객체를 조립(주입 구조적 차단)
+//  4) 상류 타임아웃 45s, try/catch, 오류 정규화(상류 원문 미노출)
+
+export const config = { maxDuration: 60 };
+
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const MAX_TEXT_LEN = 8000; // Prompts.swift 최대 프롬프트의 ~10배 여유
+const MAX_IMAGE_B64 = 6_000_000; // 2000px JPEG q0.82 실측 상한의 약 2배
+const ALLOWED_MIME = new Set(["image/jpeg", "image/png"]);
+const DAILY_LIMIT = 60; // warm instance 한정 베스트에포트 (정식 한도는 향후 Upstash)
+
+// deviceID -> { count, day } : 서버리스 warm instance 메모리. 콜드 스타트 시 초기화됨.
+const memUsage = new Map();
+
+export default async function handler(req, res) {
+  const started = Date.now();
+  try {
+    if (req.method !== "POST") return fail(res, 405, "method not allowed");
+
+    // 1) 앱 토큰 — env 미설정이면 통과(무중단 배포용). 설정 시 현재/직전 토큰 허용.
+    const accepted = [process.env.APP_TOKEN, process.env.APP_TOKEN_PREV].filter(Boolean);
+    if (accepted.length && !accepted.includes(req.headers["x-paxo-token"])) {
+      return fail(res, 401, "unauthorized");
+    }
+
+    // 2) 기기 ID(UUID) 필수 — 개인정보방침 고지("기기 ID로 사용량 제한")와 정합
+    const device = String(req.headers["x-paxo-device"] || "");
+    if (!/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(device)) {
+      return fail(res, 400, "bad device id");
+    }
+    if (!checkRateLimit(device) || !checkDurableLimit(device)) {
+      return fail(res, 429, "rate limited");
+    }
+
+    if (!process.env.GEMINI_API_KEY) return fail(res, 500, "server misconfigured");
+
+    // 3) 본문 재구성 검증 — 통과가 아니라 화이트리스트 필드로 새 객체 조립
+    const body = buildUpstreamBody(req.body); // 실패 시 throw { status: 400, message }
+
+    // 4) 상류 호출 (45s 타임아웃 — 함수 한도 60s 이내에서 우리가 오류를 통제)
+    const model = process.env.MODEL || "gemini-2.5-flash";
+    const upstream = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": process.env.GEMINI_API_KEY,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45_000),
+    });
+    const text = await upstream.text();
+
+    // 5) 로깅 (기기 ID 앞 8자만)
+    console.log(
+      JSON.stringify({
+        device: device.slice(0, 8),
+        status: upstream.status,
+        ms: Date.now() - started,
+        bytesIn: Number(req.headers["content-length"] || 0),
+      })
+    );
+
+    // 6) 성공(200)·한도초과(429)만 원형 전달(앱 파서 호환), 그 외 상류 오류는 정규화
+    if (upstream.status === 200 || upstream.status === 429) {
+      return res
+        .status(upstream.status)
+        .setHeader("content-type", "application/json")
+        .send(text);
+    }
+    return fail(res, 502, "upstream error"); // 상류 원문 미노출
+  } catch (err) {
+    if (err && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      return fail(res, 504, "upstream timeout");
+    }
+    if (err && err.status === 400) return fail(res, 400, err.message);
+    console.error("generate error:", err && err.message);
+    return fail(res, 500, "internal error");
+  }
+}
+
+// Gemini 오류 형식({error:{code,message}})과 동형 — 앱측 파서 하나로 처리 가능
+function fail(res, code, message) {
+  return res
+    .status(code)
+    .setHeader("content-type", "application/json")
+    .send(JSON.stringify({ error: { code, message } }));
+}
+
+// 화이트리스트 필드만으로 상류 본문을 새로 조립한다.
+// 허용: contents[0].parts[] 에서 { text } 1개 + { inline_data:{mime_type,data} } 1개.
+// generationConfig / safetySettings / systemInstruction / tools 등은 조립에 포함 불가.
+function buildUpstreamBody(raw) {
+  const bad = (message) => {
+    throw { status: 400, message };
+  };
+  if (!raw || typeof raw !== "object") bad("invalid body");
+
+  const contents = raw.contents;
+  if (!Array.isArray(contents) || contents.length !== 1) bad("invalid contents");
+
+  const parts = contents[0] && contents[0].parts;
+  if (!Array.isArray(parts) || parts.length === 0 || parts.length > 2) bad("invalid parts");
+
+  const outParts = [];
+  let hasText = false;
+  let hasImage = false;
+
+  for (const part of parts) {
+    if (part && typeof part.text === "string") {
+      if (hasText) bad("duplicate text part");
+      if (part.text.length > MAX_TEXT_LEN) bad("text too long");
+      outParts.push({ text: part.text });
+      hasText = true;
+    } else if (part && part.inline_data && typeof part.inline_data === "object") {
+      if (hasImage) bad("duplicate image part");
+      const mime = part.inline_data.mime_type;
+      const data = part.inline_data.data;
+      if (!ALLOWED_MIME.has(mime)) bad("unsupported mime type");
+      if (typeof data !== "string" || !/^[A-Za-z0-9+/=]+$/.test(data)) bad("invalid image data");
+      if (data.length > MAX_IMAGE_B64) bad("image too large");
+      outParts.push({ inline_data: { mime_type: mime, data } });
+      hasImage = true;
+    } else {
+      bad("unsupported part");
+    }
+  }
+  if (!hasText || !hasImage) bad("text and image required");
+
+  return { contents: [{ parts: outParts }] };
+}
+
+// 베스트에포트 인메모리 일일 제한 (warm instance 한정).
+function checkRateLimit(device) {
+  const day = new Date().toISOString().slice(0, 10);
+  const entry = memUsage.get(device);
+  if (!entry || entry.day !== day) {
+    memUsage.set(device, { count: 1, day });
+    if (memUsage.size > 10_000) memUsage.clear(); // 메모리 폭주 방지
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= DAILY_LIMIT;
+}
+
+// 내구성 있는 기기별 한도 자리(현재 no-op). 향후 Upstash Redis를 여기에 끼운다.
+// eslint-disable-next-line no-unused-vars
+function checkDurableLimit(device) {
+  return true;
+}

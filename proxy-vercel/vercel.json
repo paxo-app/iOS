@@ -1,0 +1,10 @@
+{
+  "regions": ["iad1"],
+  "functions": {
+    "api/*.js": { "maxDuration": 60 }
+  },
+  "rewrites": [
+    { "source": "/generate", "destination": "/api/generate" },
+    { "source": "/privacy", "destination": "/api/privacy" }
+  ]
+}

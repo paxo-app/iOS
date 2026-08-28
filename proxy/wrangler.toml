@@ -1,0 +1,20 @@
+name = "paxo-proxy"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# 워커를 Gemini API(미국)와 가까운 위치에서 실행해
+# "User location is not supported" 지역 차단을 방지
+[placement]
+mode = "smart"
+
+# 모델 변경이나 일일 한도 조정 시 주석 해제
+# [vars]
+# MODEL = "gemini-2.5-flash"
+# DAILY_LIMIT = "200"
+
+# 기기별 일일 한도를 쓰려면:
+#   npx wrangler kv namespace create USAGE
+# 실행 후 출력된 id를 아래에 붙여넣고 주석 해제
+# [[kv_namespaces]]
+# binding = "USAGE"
+# id = "여기에-생성된-id"
