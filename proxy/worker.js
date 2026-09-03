@@ -10,7 +10,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // 개인정보 처리방침 (앱 페이월과 App Store 메타데이터에서 링크됨)
+    // 개인정보 처리방침
     if (request.method === "GET" && url.pathname === "/privacy") {
       return new Response(PRIVACY_HTML, {
         headers: { "content-type": "text/html; charset=utf-8" },
@@ -24,8 +24,6 @@ export default {
       return json({ error: "not found" }, 404);
     }
 
-    // 선택: 앱 토큰 검사. `wrangler secret put APP_TOKEN` 설정 시에만 활성화.
-    // (정식 보호는 StoreKit 영수증 검증으로 대체 예정)
     if (env.APP_TOKEN) {
       const token = request.headers.get("x-paxo-token");
       if (token !== env.APP_TOKEN) {
@@ -58,9 +56,8 @@ export default {
     // 재시도를 위해 본문을 버퍼링 (스트림은 1회만 읽을 수 있음)
     const payload = await request.arrayBuffer();
 
-    // Cloudflare 엣지의 아웃바운드 IP가 간헐적으로 Gemini 미지원 지역을
-    // 경유해 "User location is not supported" 400이 발생할 수 있다.
-    // 해당 오류일 때만 최대 3회 재시도한다. (근본 대응은 wrangler.toml의 Smart Placement)
+    // Cloudflare 엣지 아웃바운드 IP가 Gemini 미지원 지역을 경유하면 400이 난다.
+    // 그 오류일 때만 최대 3회 재시도. (근본 대응은 wrangler.toml의 Smart Placement)
     let lastLocationError = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       const upstream = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {

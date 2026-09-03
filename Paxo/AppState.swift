@@ -216,13 +216,11 @@ final class AppState: ObservableObject {
         Task { await runExplanation() }
     }
 
-    // MARK: - 내부 흐름
-
     private func runSolve() async {
         toastDismissTask?.cancel()
         do {
             guard let capture = try await capturer.captureInteractive(mode: captureMode) else {
-                phase = .idle // 사용자가 선택을 취소함
+                phase = .idle
                 return
             }
             lastCaptureScreen = capture.screen
@@ -245,21 +243,18 @@ final class AppState: ObservableObject {
             }
 
             if resultDisplayMode == .toast {
-                // 토스트는 정답만 잠깐 — 해설 생성은 생략하고 자동으로 사라짐
                 toast.show(appState: self, on: lastCaptureScreen)
                 scheduleToastDismiss()
             } else if !quickCheckMode {
                 await runExplanation()
             }
         } catch {
-            // 정답 호출 실패: 재시도 버튼이 있는 패널로 표시 (사용량 미차감 상태라 재캡처 OK)
             toast.dismiss()
             phase = .failedAnswer(errorMessage(from: error))
             resultPanel.show(appState: self, on: lastCaptureScreen)
         }
     }
 
-    /// 풀이 중 상태를 현재 표시 모드에 맞게 띄운다
     private func presentSolving() {
         switch resultDisplayMode {
         case .panel:
@@ -295,7 +290,6 @@ final class AppState: ObservableObject {
             phase = .done
             upsertHistory()
         } catch {
-            // 해설만 실패: 정답은 보존하고 "해설 다시 시도"만 노출 (재캡처·재차감 없음)
             phase = .failedExplanation(errorMessage(from: error))
         }
     }
@@ -309,7 +303,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// 마우스 커서가 있는 화면 (히스토리 표시용)
     static func screenUnderMouse() -> NSScreen? {
         let location = NSEvent.mouseLocation
         return NSScreen.screens.first { $0.frame.contains(location) }

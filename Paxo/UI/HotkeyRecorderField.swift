@@ -40,7 +40,7 @@ struct HotkeyRecorderField: View {
         appState.suspendHotkey()
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             handle(event)
-            return nil // 입력을 다른 곳으로 전달하지 않음
+            return nil
         }
     }
 

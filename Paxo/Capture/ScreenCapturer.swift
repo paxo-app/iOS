@@ -1,11 +1,8 @@
 import AppKit
 import ScreenCaptureKit
 
-/// 영역 선택 → ScreenCaptureKit 캡처 → PNG 데이터.
-/// 화면 기록(TCC) 권한 필요. 샌드박스에서 동작하며 Mac App Store 심사에서 허용된다.
 final class ScreenCapturer {
 
-    /// 캡처 결과: JPEG 데이터 + 캡처가 일어난 화면(결과 표시를 같은 화면에 띄우기 위함)
     typealias Capture = (data: Data, screen: NSScreen)
 
     @MainActor
@@ -16,7 +13,7 @@ final class ScreenCapturer {
         switch mode {
         case .region:
             guard let selection = await SelectionOverlay.selectRegion() else {
-                return nil // 사용자가 취소
+                return nil
             }
             // 오버레이 윈도우가 화면에서 사라질 시간을 준다.
             try? await Task.sleep(nanoseconds: 150_000_000)
@@ -85,8 +82,7 @@ final class ScreenCapturer {
         return try encodeForUpload(cgImage)
     }
 
-    /// 업로드용 인코딩: 최대 2000px로 다운스케일 + JPEG 압축.
-    /// AI 인식 품질은 유지하면서 페이로드(전송량·토큰 비용·지연)를 크게 줄인다.
+    /// 2000px 상한 — 인식 품질은 유지하면서 전송량·토큰 비용·지연을 줄인다.
     private func encodeForUpload(_ cgImage: CGImage) throws -> Data {
         let maxDimension: CGFloat = 2000
         let width = CGFloat(cgImage.width)

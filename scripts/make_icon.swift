@@ -1,9 +1,8 @@
 import AppKit
 
-// Paxo 앱 아이콘 생성기 — 1024 기준 좌표로 그린 뒤 각 사이즈로 렌더링
-// 디자인: 블루 그라디언트 스쿼클 + 흰색 뷰파인더 브래킷 + 텍스트 라인 3개
-
-let outputDir = "/Users/yunhyeseong/Documents/GitHub/paxo/Paxo/Assets.xcassets/AppIcon.appiconset"
+let outputDir = CommandLine.arguments.count > 1
+    ? CommandLine.arguments[1]
+    : "Paxo/Assets.xcassets/AppIcon.appiconset"
 
 let sizes: [(name: String, px: Int)] = [
     ("icon_16", 16), ("icon_16@2x", 32),
@@ -34,7 +33,6 @@ func render(px: Int) -> Data {
     )!
     gradient.draw(in: bgPath, angle: 270)
 
-    // 뷰파인더 브래킷 (4 모서리)
     NSColor.white.setStroke()
     let bracket = NSBezierPath()
     bracket.lineWidth = 58 * s
@@ -47,25 +45,20 @@ func render(px: Int) -> Data {
     let top: CGFloat = 754 * s
     let arm: CGFloat = 130 * s
 
-    // 좌상
     bracket.move(to: NSPoint(x: left, y: top - arm))
     bracket.line(to: NSPoint(x: left, y: top))
     bracket.line(to: NSPoint(x: left + arm, y: top))
-    // 우상
     bracket.move(to: NSPoint(x: right - arm, y: top))
     bracket.line(to: NSPoint(x: right, y: top))
     bracket.line(to: NSPoint(x: right, y: top - arm))
-    // 좌하
     bracket.move(to: NSPoint(x: left, y: bottom + arm))
     bracket.line(to: NSPoint(x: left, y: bottom))
     bracket.line(to: NSPoint(x: left + arm, y: bottom))
-    // 우하
     bracket.move(to: NSPoint(x: right - arm, y: bottom))
     bracket.line(to: NSPoint(x: right, y: bottom))
     bracket.line(to: NSPoint(x: right, y: bottom + arm))
     bracket.stroke()
 
-    // 텍스트 라인 3개
     let lines = NSBezierPath()
     lines.lineWidth = 58 * s
     lines.lineCapStyle = .round

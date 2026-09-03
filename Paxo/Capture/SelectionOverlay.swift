@@ -1,6 +1,5 @@
 import AppKit
 
-/// 화면 위에 반투명 오버레이를 띄우고 드래그로 영역을 선택하게 한다.
 /// 반환 rect는 전역 화면 좌표(AppKit, 좌하단 원점).
 @MainActor
 enum SelectionOverlay {
@@ -114,7 +113,7 @@ private final class SelectionView: NSView {
         path.stroke()
     }
 
-    /// 드래그 시작 전, 오버레이 딤 위에 직접 안내를 그린다 (플로팅 패널은 딤에 가려지므로)
+    /// 딤 위에 직접 그린다 — 플로팅 패널은 딤에 가려진다
     private func drawHint() {
         let text = "풀이할 영역을 드래그하세요  ·  Esc 취소" as NSString
         let paragraph = NSMutableParagraphStyle()

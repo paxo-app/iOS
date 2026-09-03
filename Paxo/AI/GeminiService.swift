@@ -120,7 +120,6 @@ struct GeminiService {
         return text
     }
 
-    /// 서버/Gemini 오류 응답에서 짧은 메시지만 추출. 원문(JSON/HTML)을 그대로 노출하지 않는다.
     private static func serverMessage(from data: Data) -> String? {
         struct ErrorEnvelope: Decodable {
             struct Inner: Decodable { let message: String? }

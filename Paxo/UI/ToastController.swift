@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// 정답만 잠깐 보여주는 토스트(HUD) 창. Raycast의 잠깐 뜨는 알림과 유사.
-/// 위치는 설정(panelPosition), 표시 시간은 toastDuration을 따르며 자동으로 페이드 아웃된다.
 @MainActor
 final class ToastController {
     private var panel: NSPanel?
@@ -17,7 +15,6 @@ final class ToastController {
 
         guard let panel, let screen = screen ?? NSScreen.main else { return }
 
-        // SwiftUI 콘텐츠 크기에 맞춰 창 크기 조정 (로딩 → 정답으로 바뀌면 다시 맞춤)
         host.layoutSubtreeIfNeeded()
         let fitting = host.fittingSize
         let size = CGSize(

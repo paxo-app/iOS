@@ -1,6 +1,6 @@
 # Paxo 프록시 (Cloudflare Worker) — 백업
 
-> ⚠️ **현재 기본 프록시는 Vercel(`proxy-vercel/`)이다.** Cloudflare Workers는 아웃바운드 IP가
+> 현재 기본 프록시는 Vercel(`proxy-vercel/`)이다. Cloudflare Workers는 아웃바운드 IP가
 > 간헐적으로 Gemini 미지원 지역을 경유해 "User location is not supported" 오류가 랜덤 발생하는
 > 문제가 있어(실측 ~50% 실패) 백업으로 강등됐다. 앱의 기본 URL은 `paxo-proxy.vercel.app`이다.
 

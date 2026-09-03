@@ -1,11 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// 풀이 결과를 보여주는 플로팅 패널. 위치는 설정(panelPosition)을 따른다.
 @MainActor
 final class ResultPanelController {
     private var panel: ResultPanel?
-    /// 사용자가 이번 표시 세션에서 직접 드래그로 옮겼으면 위치를 재설정하지 않는다.
     private var userMoved = false
 
     func show(appState: AppState, on screen: NSScreen? = nil) {
@@ -47,7 +45,6 @@ final class ResultPanelController {
     }
 }
 
-/// ESC로 닫을 수 있고, 사용자 드래그 이동을 콜백으로 알리는 패널.
 final class ResultPanel: NSPanel, NSWindowDelegate {
     var onUserMove: (() -> Void)?
     private var suppressMoveCallback = false
@@ -68,7 +65,7 @@ final class ResultPanel: NSPanel, NSWindowDelegate {
         orderOut(nil)
     }
 
-    /// 코드로 위치를 옮길 때 사용자 이동 콜백이 잘못 발동하지 않게 감싼다.
+    /// 코드로 옮길 때 onUserMove가 잘못 발동하지 않게 감싼다
     func moveProgrammatically(_ block: () -> Void) {
         suppressMoveCallback = true
         block()

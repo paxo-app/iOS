@@ -19,9 +19,10 @@
   cp Config/Secrets.example.swift Paxo/Secrets.swift
   ```
 
-  이 파일이 없으면 `Secrets` 심볼을 못 찾아 빌드가 실패한다. 토큰 값은 비워둬도 빌드·실행은 되며,
-  프록시에 `APP_TOKEN`이 설정된 뒤부터 실제 값이 필요하다 (아래 '프록시 보안' 참고).
-  ⚠️ 템플릿을 `Paxo/` 안에 복사본으로 남겨두지 말 것 — 이 디렉토리는 파일시스템 동기화로
+  이 파일이 없으면 `Secrets` 심볼을 못 찾아 빌드가 실패한다.
+  배포된 프록시에는 이미 `APP_TOKEN`이 설정돼 있다. 토큰을 빈 값으로 두면 빌드·실행은 되지만
+  AI 호출이 전부 401로 실패한다. 값은 팀에서 받는다 (아래 '프록시 보안' 참고).
+  템플릿을 `Paxo/` 안에 복사본으로 남겨두지 말 것 — 이 디렉토리는 파일시스템 동기화로
   자동 컴파일되므로 `Secrets`가 중복 선언되어 빌드가 깨진다.
 - `Paxo.xcodeproj` 열기 → Signing & Capabilities에서 Team 선택 → Run
 - 첫 캡처 시 **화면 기록 권한** 허용 필요 (시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음). 권한 허용 후 앱 재실행 필요할 수 있음
@@ -71,9 +72,7 @@ proxy/                     Cloudflare Worker 프록시 (백업 — Gemini 지역
 - [ ] App Store Connect에 구독 상품 생성 (product ID 동일하게)
 - [ ] 서버 측 구독 검증 — StoreKit 영수증(JWS)을 프록시에서 확인, 클라이언트 카운트 대체
 - [x] 앱 아이콘 (Assets.xcassets — 원본 스크립트로 재생성 가능) + 온보딩(환영·권한·시작 3단계)
-- [ ] App Store 제출 — 가이드: [docs/app-store-submission.md](docs/app-store-submission.md),
-      문구·심사노트: [docs/app-store-copy.md](docs/app-store-copy.md)
-      (⚠️ 제출 전 `vercel env add APP_TOKEN production` 강제화 — 아래 프록시 보안 참고)
+- [ ] App Store 제출 (제출 전 `vercel env add APP_TOKEN production` 강제화 — 아래 '프록시 보안' 참고)
 - [ ] v2 — 오답노트 자동 축적, 복습 알림(SRS)
 
 ## 프록시 보안 (APP_TOKEN)
@@ -85,7 +84,16 @@ proxy/                     Cloudflare Worker 프록시 (백업 — Gemini 지역
   값이 빈 템플릿(`Config/Secrets.example.swift`)뿐이다.
 - **배포 순서 (401 사고 방지)**: 프록시 배포(토큰 미설정 → 무중단) → 앱 빌드 배포 → `vercel env add APP_TOKEN production` 입력 → `npx vercel --prod` 재배포 → 이때부터 토큰 없는 요청 401.
 - 로테이션: 새 토큰을 `APP_TOKEN`, 기존을 `APP_TOKEN_PREV`로 두면 구버전 앱도 한동안 동작.
-- ⚠️ 바이너리에서 추출 가능한 공유 시크릿이므로 완전한 방어는 아니다. 드라이브바이 어뷰징 차단용이며, 정식 방어(기기별 내구성 한도·영수증 검증)는 v2 과제.
+- 팀 테스트용 토큰은 `APP_TOKEN_PREV` 슬롯에 둔다. 프로덕션 토큰과 분리돼 있어, 유출되거나
+  테스트가 끝나면 `APP_TOKEN_PREV`만 지우고 재배포해 출시 앱에 영향 없이 회수할 수 있다.
+- 배포 직후 검증은 몇 초 기다린다. `vercel --prod` 반환 시점과 별칭이 새 배포로
+  전환되는 시점 사이에 짧은 지연이 있어, 바로 확인하면 아직 옛 배포가 응답해 401이 난다.
+  값이 틀린 걸로 오해하기 쉬우니 `sleep 10` 후 재확인한다.
+- 검증 curl은 `x-paxo-device`를 일부러 UUID가 아닌 값으로 보낸다. `400 bad device id`가 뜨면 성공
+  (토큰 검사를 통과하고 다음 단계에서 걸린 것). Gemini를 호출하지 않아 비용도 들지 않는다.
+  배포 직통 URL(`paxo-proxy-xxxx.vercel.app`)은 Deployment Protection 때문에 별도로 401이 나므로
+  반드시 별칭(`paxo-proxy.vercel.app`)으로 확인한다.
+- 바이너리에서 추출 가능한 공유 시크릿이므로 완전한 방어는 아니다. 드라이브바이 어뷰징 차단용이며, 정식 방어(기기별 내구성 한도·영수증 검증)는 v2 과제.
 
 ## App Store 메모
 

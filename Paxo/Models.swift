@@ -61,7 +61,7 @@ enum PanelPosition: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// 주어진 크기의 창을 이 위치에 놓기 위한 원점(AppKit 좌하단 원점 기준)
+    /// AppKit 좌하단 원점 기준
     func origin(for size: CGSize, on screen: NSScreen, margin: CGFloat = 16) -> NSPoint {
         let frame = screen.visibleFrame
         let x: CGFloat
@@ -86,10 +86,9 @@ enum PanelPosition: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-/// 결과를 어떻게 보여줄지
 enum ResultDisplayMode: String, CaseIterable, Codable, Identifiable {
-    case panel  // 정답 + 해설 패널 (기본)
-    case toast  // 정답만 잠깐 떴다 사라지는 토스트
+    case panel
+    case toast
 
     var id: String { rawValue }
 

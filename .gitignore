@@ -29,8 +29,8 @@ node_modules/
 # Vercel
 .vercel
 
-# 로컬 시크릿 — Config/Secrets.example.swift를 복사해서 만든다
+# 로컬 시크릿
 Paxo/Secrets.swift
 
-# 비공개 문서 (사업계획서·신청서)
-docs/hansung/
+docs/hansung
+docs/private

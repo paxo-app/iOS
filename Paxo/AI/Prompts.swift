@@ -1,8 +1,5 @@
 import Foundation
 
-/// 2단계 호출 구조:
-/// 1) answer — 정답만 짧게 (빠르고 저렴)
-/// 2) explanation — 사용자가 해설을 볼 때 생성 (기본 모드에서는 자동 연속 호출)
 enum Prompts {
     static func answer(preset: SubjectPreset) -> String {
         """
