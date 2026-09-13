@@ -12,6 +12,9 @@
 
 ## 개발 셋업
 
+> 팀 작업 흐름과 기여 방법은 [CONTRIBUTING.md](CONTRIBUTING.md),
+> AI 에이전트 규칙은 [AGENTS.md](AGENTS.md), AI 사용 원칙은 [docs/ai-usage-rules.md](docs/ai-usage-rules.md) 참고.
+
 - 요구사항: macOS 14+, Xcode 16+
 - **시크릿 파일 생성 (클론 직후 1회 필수)** — `Paxo/Secrets.swift`는 Git에 올라가지 않으므로 직접 만들어야 한다:
 
@@ -58,9 +61,13 @@ Paxo/
   UI/                      메뉴바 팝업 / 결과 패널 / 토스트 / 설정 / 페이월 / 마크다운 렌더러
   Store/                   StoreKit 2 구독 + 무료 사용량 추적
   Storage/                 히스토리 JSON, 키체인
+PaxoTests/                 순수 로직 테스트 (Swift Testing)
 Config/                    Info.plist, entitlements (샌드박스), StoreKit 테스트 설정, 시크릿 템플릿
 proxy-vercel/              Vercel API 프록시 (기본 — 키 보호 + 토큰·본문 검증 + 사용량 제한)
 proxy/                     Cloudflare Worker 프록시 (백업 — Gemini 지역 차단 이슈로 강등)
+docs/                      아키텍처 · 도메인 용어 · 결정 기록 · AI 사용 원칙 · 프롬프트 라이브러리
+.claude/skills/            Claude Code 스킬 (release-check, proxy-change, weekly-report)
+.github/workflows/         CI — 빌드·테스트·포맷·금지파일 검사
 ```
 
 ## 로드맵
@@ -72,6 +79,7 @@ proxy/                     Cloudflare Worker 프록시 (백업 — Gemini 지역
 - [ ] App Store Connect에 구독 상품 생성 (product ID 동일하게)
 - [ ] 서버 측 구독 검증 — StoreKit 영수증(JWS)을 프록시에서 확인, 클라이언트 카운트 대체
 - [x] 앱 아이콘 (Assets.xcassets — 원본 스크립트로 재생성 가능) + 온보딩(환영·권한·시작 3단계)
+- [x] AX 인프라 — AGENTS.md/CLAUDE.md, CI 게이트, 테스트 타깃, 프롬프트 라이브러리
 - [ ] App Store 제출 (제출 전 `vercel env add APP_TOKEN production` 강제화 — 아래 '프록시 보안' 참고)
 - [ ] v2 — 오답노트 자동 축적, 복습 알림(SRS)
 
@@ -101,3 +109,12 @@ proxy/                     Cloudflare Worker 프록시 (백업 — Gemini 지역
 - 화면 캡처(ScreenCaptureKit + TCC)와 전역 단축키(RegisterEventHotKey)는 MAS 심사 허용 범위
 - 구독은 Apple IAP 의무 (Small Business Program 수수료 15%)
 - 포지셔닝: "풀이·해설 학습 도우미" — 해설은 항상 접근 가능해야 함 (빠른 채점 모드도 해설을 숨기지 않고 접어둘 뿐)
+
+## 브랜치
+
+- `develop` — 기본 브랜치. 기능 PR은 여기로 보내고 Squash로 머지한다
+- `main` — 출시본. 릴리즈 PR(develop → main)만 Merge로 머지한다
+
+## 라이선스
+
+[MIT](LICENSE)

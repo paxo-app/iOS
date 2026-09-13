@@ -76,7 +76,8 @@ struct MarkdownBlocksView: View {
             index = line.index(after: index)
         }
         guard !digits.isEmpty, index < line.endIndex,
-              line[index] == "." || line[index] == ")" else { return nil }
+            line[index] == "." || line[index] == ")"
+        else { return nil }
         let marker = digits + String(line[index])
         let rest = line[line.index(after: index)...].trimmingCharacters(in: .whitespaces)
         guard !rest.isEmpty else { return nil }

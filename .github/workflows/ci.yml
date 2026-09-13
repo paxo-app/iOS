@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XCODEBUILD_FLAGS: >-
+    -project Paxo.xcodeproj
+    -scheme Paxo
+    -destination platform=macOS
+    CODE_SIGNING_ALLOWED=NO
+
+jobs:
+  guard:
+    name: 커밋 금지 파일 검사
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 시크릿·비공개 파일이 추적되는지 검사
+        run: |
+          fail=0
+          check() {
+            if git ls-files --error-unmatch "$1" >/dev/null 2>&1; then
+              echo "::error file=$1::$1 은(는) 커밋하면 안 되는 파일입니다"
+              fail=1
+            fi
+          }
+          check Paxo/Secrets.swift
+          for p in $(git ls-files 'docs/hansung/*' 'docs/private/*' '*/node_modules/*' 'node_modules/*' '*.vercel/*' '*.wrangler/*'); do
+            echo "::error file=$p::$p 은(는) 커밋하면 안 되는 경로입니다"
+            fail=1
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "저장소가 공개입니다. .gitignore 를 확인하고 git rm --cached 로 제거하세요."
+            exit 1
+          fi
+          echo "✓ 금지 파일 없음"
+
+      - name: 템플릿이 Paxo/ 안에 복사돼 있지 않은지 검사
+        run: |
+          if git ls-files 'Paxo/Secrets*.swift' | grep -q 'example'; then
+            echo "::error::Secrets 템플릿이 Paxo/ 안에 있으면 중복 선언으로 빌드가 깨집니다"
+            exit 1
+          fi
+          echo "✓ 템플릿 위치 정상"
+
+  format:
+    name: swift-format
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 포맷 검사
+        run: xcrun swift-format lint --recursive --strict --configuration .swift-format Paxo PaxoTests
+
+  build:
+    name: 빌드 및 테스트
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 시크릿 템플릿 생성
+        run: cp Config/Secrets.example.swift Paxo/Secrets.swift
+
+      - name: 빌드
+        run: xcodebuild $XCODEBUILD_FLAGS -configuration Debug build
+
+      - name: 테스트
+        run: xcodebuild $XCODEBUILD_FLAGS test
+
+      - name: 앱 번들에 내부 문서가 섞이지 않았는지 검사
+        run: |
+          app=$(find ~/Library/Developer/Xcode/DerivedData -name 'Paxo.app' -type d | head -1)
+          if [ -z "$app" ]; then echo "::error::빌드 산출물을 찾지 못했습니다"; exit 1; fi
+          if find "$app" -iname '*.md' | grep .; then
+            echo "::error::내부 마크다운이 앱 번들에 포함됐습니다"
+            exit 1
+          fi
+          echo "✓ 번들 정상"

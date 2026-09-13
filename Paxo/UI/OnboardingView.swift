@@ -62,15 +62,18 @@ struct OnboardingView: View {
             Text("Paxo에 오신 것을 환영해요")
                 .font(.title2.bold())
             VStack(alignment: .leading, spacing: 10) {
-                featureRow(icon: "camera.viewfinder",
-                           title: "단축키 한 번으로 캡처",
-                           detail: "\(appState.hotkey.display) 를 누르면 화면 속 문제를 바로 캡처해요.")
-                featureRow(icon: "text.book.closed",
-                           title: "정답과 해설을 함께",
-                           detail: "AI가 정답과 함께 왜 그런지 풀이 과정을 설명해요.")
-                featureRow(icon: "checkmark.circle",
-                           title: "빠른 채점 모드",
-                           detail: "문제집 셀프 채점엔 정답 먼저, 해설은 필요할 때만.")
+                featureRow(
+                    icon: "camera.viewfinder",
+                    title: "단축키 한 번으로 캡처",
+                    detail: "\(appState.hotkey.display) 를 누르면 화면 속 문제를 바로 캡처해요.")
+                featureRow(
+                    icon: "text.book.closed",
+                    title: "정답과 해설을 함께",
+                    detail: "AI가 정답과 함께 왜 그런지 풀이 과정을 설명해요.")
+                featureRow(
+                    icon: "checkmark.circle",
+                    title: "빠른 채점 모드",
+                    detail: "문제집 셀프 채점엔 정답 먼저, 해설은 필요할 때만.")
             }
             .padding(.top, 4)
         }
@@ -115,7 +118,9 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     Button("시스템 설정 열기") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                        if let url = URL(
+                            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+                        {
                             NSWorkspace.shared.open(url)
                         }
                     }
@@ -137,15 +142,18 @@ struct OnboardingView: View {
             Text("메뉴바에서 만나요")
                 .font(.title2.bold())
             VStack(alignment: .leading, spacing: 10) {
-                featureRow(icon: "text.viewfinder",
-                           title: "Dock에는 보이지 않아요",
-                           detail: "Paxo는 화면 위 메뉴바에 상주하는 앱이에요.")
-                featureRow(icon: "keyboard",
-                           title: "언제든 \(appState.hotkey.display)",
-                           detail: "어떤 앱을 쓰고 있어도 단축키로 바로 풀이를 시작해요. 단축키는 설정에서 바꿀 수 있어요.")
-                featureRow(icon: "gearshape",
-                           title: "설정에서 맞춤 조정",
-                           detail: "캡처 방식(영역/전체 화면), 빠른 채점 모드, 과목 프리셋을 바꿀 수 있어요.")
+                featureRow(
+                    icon: "text.viewfinder",
+                    title: "Dock에는 보이지 않아요",
+                    detail: "Paxo는 화면 위 메뉴바에 상주하는 앱이에요.")
+                featureRow(
+                    icon: "keyboard",
+                    title: "언제든 \(appState.hotkey.display)",
+                    detail: "어떤 앱을 쓰고 있어도 단축키로 바로 풀이를 시작해요. 단축키는 설정에서 바꿀 수 있어요.")
+                featureRow(
+                    icon: "gearshape",
+                    title: "설정에서 맞춤 조정",
+                    detail: "캡처 방식(영역/전체 화면), 빠른 채점 모드, 과목 프리셋을 바꿀 수 있어요.")
             }
             .padding(.top, 4)
         }

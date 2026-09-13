@@ -52,7 +52,7 @@ struct HotkeyRecorderField: View {
     }
 
     private func handle(_ event: NSEvent) {
-        if event.keyCode == 53 { // Escape
+        if event.keyCode == 53 {  // Escape
             stopRecording()
             return
         }

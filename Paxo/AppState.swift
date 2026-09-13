@@ -13,8 +13,8 @@ final class AppState: ObservableObject {
         case answerReady
         case solvingExplanation
         case done
-        case failedAnswer(String)      // 정답 호출 실패 — 사용량 미차감 상태
-        case failedExplanation(String) // 정답은 있음, 해설만 실패 — 사용량 이미 차감됨
+        case failedAnswer(String)  // 정답 호출 실패 — 사용량 미차감 상태
+        case failedExplanation(String)  // 정답은 있음, 해설만 실패 — 사용량 이미 차감됨
     }
 
     @Published private(set) var phase: SolvePhase = .idle
@@ -131,11 +131,14 @@ final class AppState: ObservableObject {
         quickCheckMode = UserDefaults.standard.bool(forKey: "quickCheckMode")
         preset = SubjectPreset(rawValue: UserDefaults.standard.string(forKey: "preset") ?? "") ?? .general
         captureMode = CaptureMode(rawValue: UserDefaults.standard.string(forKey: "captureMode") ?? "") ?? .region
-        panelPosition = PanelPosition(rawValue: UserDefaults.standard.string(forKey: "panelPosition") ?? "") ?? .topRight
-        resultDisplayMode = ResultDisplayMode(rawValue: UserDefaults.standard.string(forKey: "resultDisplayMode") ?? "") ?? .panel
+        panelPosition =
+            PanelPosition(rawValue: UserDefaults.standard.string(forKey: "panelPosition") ?? "") ?? .topRight
+        resultDisplayMode =
+            ResultDisplayMode(rawValue: UserDefaults.standard.string(forKey: "resultDisplayMode") ?? "") ?? .panel
         toastDuration = UserDefaults.standard.object(forKey: "toastDuration") as? Double ?? 4.0
         if let data = UserDefaults.standard.data(forKey: "hotkeySpec"),
-           let spec = try? JSONDecoder().decode(HotkeySpec.self, from: data) {
+            let spec = try? JSONDecoder().decode(HotkeySpec.self, from: data)
+        {
             hotkey = spec
         } else {
             hotkey = .default
@@ -279,9 +282,10 @@ final class AppState: ObservableObject {
 
     private func runExplanation() async {
         guard let current,
-              let image = imageCache[current.id],
-              let answer = current.answer,
-              current.explanation == nil else { return }
+            let image = imageCache[current.id],
+            let answer = current.answer,
+            current.explanation == nil
+        else { return }
         phase = .solvingExplanation
         do {
             let explanation = try await makeService()

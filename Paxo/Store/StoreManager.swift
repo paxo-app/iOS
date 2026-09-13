@@ -49,8 +49,9 @@ final class StoreManager: ObservableObject {
         var pro = false
         for await entitlement in Transaction.currentEntitlements {
             if case .verified(let transaction) = entitlement,
-               Self.productIDs.contains(transaction.productID),
-               transaction.revocationDate == nil {
+                Self.productIDs.contains(transaction.productID),
+                transaction.revocationDate == nil
+            {
                 pro = true
             }
         }

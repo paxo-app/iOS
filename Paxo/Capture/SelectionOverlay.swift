@@ -175,7 +175,7 @@ private final class SelectionView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { // Escape
+        if event.keyCode == 53 {  // Escape
             session.finish(rect: nil, screen: nil)
         } else {
             super.keyDown(with: event)
