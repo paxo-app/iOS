@@ -22,7 +22,8 @@ final class ScreenCapturer {
         case .fullScreen:
             // 마우스 커서가 있는 화면 전체를 즉시 캡처
             let mouse = NSEvent.mouseLocation
-            let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+            let screen =
+                NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
                 ?? NSScreen.main
             guard let screen else { throw CaptureError.displayNotFound }
             let data = try await capture(rect: screen.frame, on: screen)
@@ -91,15 +92,16 @@ final class ScreenCapturer {
 
         var finalImage = cgImage
         if scale < 1,
-           let context = CGContext(
-               data: nil,
-               width: Int(width * scale),
-               height: Int(height * scale),
-               bitsPerComponent: 8,
-               bytesPerRow: 0,
-               space: CGColorSpaceCreateDeviceRGB(),
-               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-           ) {
+            let context = CGContext(
+                data: nil,
+                width: Int(width * scale),
+                height: Int(height * scale),
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        {
             context.interpolationQuality = .high
             context.draw(
                 cgImage,
@@ -109,10 +111,12 @@ final class ScreenCapturer {
         }
 
         let bitmap = NSBitmapImageRep(cgImage: finalImage)
-        guard let jpeg = bitmap.representation(
-            using: .jpeg,
-            properties: [.compressionFactor: 0.82]
-        ) else {
+        guard
+            let jpeg = bitmap.representation(
+                using: .jpeg,
+                properties: [.compressionFactor: 0.82]
+            )
+        else {
             throw CaptureError.encodingFailed
         }
         return jpeg

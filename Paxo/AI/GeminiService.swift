@@ -53,9 +53,11 @@ struct GeminiService {
         guard !apiKey.isEmpty else {
             throw GeminiError.missingKey
         }
-        guard let url = URL(
-            string: "https://generativelanguage.googleapis.com/v1beta/models/\(Self.model):generateContent"
-        ) else {
+        guard
+            let url = URL(
+                string: "https://generativelanguage.googleapis.com/v1beta/models/\(Self.model):generateContent"
+            )
+        else {
             throw GeminiError.badURL
         }
         var request = URLRequest(url: url)
@@ -106,7 +108,8 @@ struct GeminiService {
         }
 
         let decoded = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
-        let text = decoded.candidates?
+        let text =
+            decoded.candidates?
             .first?
             .content?
             .parts?

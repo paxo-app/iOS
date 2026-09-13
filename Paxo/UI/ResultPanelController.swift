@@ -34,7 +34,7 @@ final class ResultPanelController {
 
     func hide() {
         panel?.orderOut(nil)
-        userMoved = false // 다음 표시 때는 설정 위치에서 다시 시작
+        userMoved = false  // 다음 표시 때는 설정 위치에서 다시 시작
     }
 
     private func position(using panelPosition: PanelPosition, on screen: NSScreen?) {

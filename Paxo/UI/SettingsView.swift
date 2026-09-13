@@ -12,11 +12,13 @@ struct SettingsView: View {
                         Text(mode.displayName).tag(mode)
                     }
                 }
-                Text(appState.resultDisplayMode == .toast
-                     ? "정답만 잠깐 떴다 사라집니다. 해설은 생성하지 않아요."
-                     : "정답과 해설을 창으로 보여줍니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    appState.resultDisplayMode == .toast
+                        ? "정답만 잠깐 떴다 사라집니다. 해설은 생성하지 않아요."
+                        : "정답과 해설을 창으로 보여줍니다."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
                 Picker("표시 위치", selection: $appState.panelPosition) {
                     ForEach(PanelPosition.allCases) { position in
@@ -39,9 +41,11 @@ struct SettingsView: View {
             if appState.resultDisplayMode == .panel {
                 Section("풀이") {
                     Toggle("빠른 채점 모드", isOn: $appState.quickCheckMode)
-                    Text("문제집을 풀고 스스로 채점할 때를 위한 모드입니다. 정답을 먼저 크게 표시하고, 해설은 '해설 보기'를 눌렀을 때 생성합니다. 끄면 항상 정답과 해설이 함께 표시됩니다.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(
+                        "문제집을 풀고 스스로 채점할 때를 위한 모드입니다. 정답을 먼저 크게 표시하고, 해설은 '해설 보기'를 눌렀을 때 생성합니다. 끄면 항상 정답과 해설이 함께 표시됩니다."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
 

@@ -40,14 +40,16 @@ final class ToastController {
     func dismiss() {
         guard let panel, isVisible else { return }
         isVisible = false
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.3
-            panel.animator().alphaValue = 0
-        }, completionHandler: { [weak self, weak panel] in
-            // 페이드 중 show()가 다시 호출돼 isVisible=true가 됐으면 이 낡은 완료는 무시.
-            guard let self, !self.isVisible else { return }
-            panel?.orderOut(nil)
-        })
+        NSAnimationContext.runAnimationGroup(
+            { ctx in
+                ctx.duration = 0.3
+                panel.animator().alphaValue = 0
+            },
+            completionHandler: { [weak self, weak panel] in
+                // 페이드 중 show()가 다시 호출돼 isVisible=true가 됐으면 이 낡은 완료는 무시.
+                guard let self, !self.isVisible else { return }
+                panel?.orderOut(nil)
+            })
     }
 
     private func ensurePanel(appState: AppState) -> NSHostingView<AnyView> {

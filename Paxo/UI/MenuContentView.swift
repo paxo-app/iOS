@@ -75,9 +75,10 @@ struct MenuContentView: View {
                 SettingsLink {
                     Text("설정…")
                 }
-                .simultaneousGesture(TapGesture().onEnded {
-                    NSApp.activate(ignoringOtherApps: true)
-                })
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        NSApp.activate(ignoringOtherApps: true)
+                    })
                 Spacer()
                 Button("종료") {
                     NSApp.terminate(nil)
