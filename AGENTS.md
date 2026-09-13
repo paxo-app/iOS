@@ -1,5 +1,7 @@
 # Paxo — AI 에이전트 작업 규칙
 
+> **작업 시작 전 반드시 `git pull`.** 규칙 문서가 자주 바뀐다.
+
 Paxo는 화면 속 문제를 단축키로 캡처하면 AI가 정답과 해설을 알려주는 **macOS 메뉴바 앱**이다.
 저장소 이름이 `iOS`지만 iOS 앱이 아니다. 배포 타깃은 macOS 14+.
 
@@ -8,6 +10,12 @@ Paxo는 화면 속 문제를 단축키로 캡처하면 AI가 정답과 해설을
 
 - `Paxo/AGENTS.md` — Swift 앱 코드 (밟기 쉬운 지뢰 모음)
 - `proxy-vercel/AGENTS.md` — API 프록시 계약
+
+공통 문서:
+
+- `docs/architecture.md` — 앱 ↔ 프록시 ↔ Gemini ↔ StoreKit 연결
+- `docs/domain.md` — 기능 · 과금 용어
+- `docs/decisions.md` — 팀 결정 기록 (날짜순)
 
 ## 셋업
 
@@ -65,7 +73,8 @@ AI 생성 코드가 조용히 중복을 쌓는 것이 이 저장소의 가장 �
 - 브랜치 접두사: `feat/`, `fix/`, `docs/`, `chore/`, `style/`, `test/`
 - 커밋: Conventional Commits 접두사 + **한국어 제목** + `-` 불릿 본문
 - **AI 사용 여부를 커밋에 표기하지 않는다.** 초안을 누가 썼든 커밋한 사람이 전적으로 책임진다
-- `main` 직접 푸시 금지. PR과 CI 통과가 필수다
+- 기능 브랜치는 `develop`에서 만들고 PR도 `develop`으로 보낸다 (Squash 머지). `main`은 릴리즈 PR만 받는다 (Merge 머지)
+- `develop` · `main` 직접 푸시 금지. PR과 CI 통과가 필수다
 - PR을 올리기 전에 빌드와 테스트를 **실제로 돌려서** 통과를 확인한다
 
 ## 절대 하지 말 것
@@ -73,13 +82,14 @@ AI 생성 코드가 조용히 중복을 쌓는 것이 이 저장소의 가장 �
 - `Paxo.xcodeproj/project.pbxproj`의 파일 목록 수동 편집 — `Paxo/`는 파일시스템 동기화 그룹이라 손댈 필요가 없다
 - `Paxo/Secrets.swift` 커밋
 - `docs/hansung/` 커밋 — 사업계획서와 신청서, 비공개다
+- `docs/private/` 커밋 — 비공개 저장소 `paxo-app/internal`의 clone이다. 내용을 공개 저장소로 옮기지 않는다
 - `node_modules/` 커밋
 
 **이 저장소는 공개다.** 커밋 전에 시크릿이 섞였는지 확인한다.
 
 ## 릴리스
 
-전체 절차는 `docs/app-store-submission.md`. 제출 전 함정 3가지만 여기 적는다.
+전체 절차는 비공개 저장소 `paxo-app/internal`의 `app-store-submission.md`(로컬에선 `docs/private/`)에 있다. 제출 전 함정 3가지만 여기 적는다.
 
 1. `MARKETING_VERSION`이 아직 `0.1.0`이다 — 출시 빌드는 `1.0.0`
 2. 공유 스킴의 StoreKit Configuration을 **None**으로 되돌려야 한다. 안 그러면 실제 결제가 동작하지 않는다

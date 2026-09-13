@@ -19,22 +19,25 @@ Xcode에서 Signing & Capabilities → Team을 본인 계정으로 바꾸고 Run
 비워두면 빌드·실행은 되지만 AI 호출이 전부 401로 실패한다. 토큰 값은 팀에 요청한다.
 팀 테스트용 토큰은 프로덕션과 분리된 `APP_TOKEN_PREV` 슬롯을 쓴다.
 
-맥북·Xcode가 처음이라면 main의 `docs/team-onboarding.md`를 먼저 본다.
+팀원이라면 운영 규칙과 온보딩 문서가 있는 비공개 저장소도 받는다: `git clone https://github.com/paxo-app/internal.git docs/private` → `docs/private/README.md`부터 본다.
 
 ## 작업 흐름
 
 ```sh
-git switch -c feat/무엇을-한다
+git fetch origin
+git switch -c feat/무엇을-한다 origin/develop
 # 작업
 xcodebuild -project Paxo.xcodeproj -scheme Paxo -destination 'platform=macOS' \
   CODE_SIGNING_ALLOWED=NO test
 xcrun swift-format lint --recursive --strict --configuration .swift-format Paxo PaxoTests
 git push -u origin HEAD
-gh pr create
+gh pr create --base develop
 ```
 
-`main`은 보호돼 있다. 직접 푸시할 수 없고 PR과 CI 통과가 필요하다.
-리뷰어 승인은 필수가 아니므로 CI가 초록이면 본인이 머지한다.
+`develop`과 `main`은 보호돼 있다. 직접 푸시할 수 없고 PR이 필요하다.
+
+- **`develop`** — 기능 PR을 **Squash**로 머지한다. 리뷰어 승인은 필수가 아니므로 CI가 초록이면 본인이 머지한다. 단 과금 · 프록시 · 릴리즈 설정 파일을 건드리면 CODEOWNERS 승인이 필요하다
+- **`main`** — 릴리즈 PR(develop → main)만 **Merge**로 머지한다. 승인 1명이 필요하다. Squash하면 다음 릴리즈 PR에 이미 나간 변경이 다시 뜬다
 
 ## 커밋
 
@@ -68,3 +71,7 @@ scripts/ax-metrics.sh 30
 ```
 
 PR 리드타임과 CI 통과율을 집계한다. 체감이 아니라 숫자로 본다.
+
+## 라이선스
+
+기여한 코드는 저장소의 [MIT 라이선스](LICENSE)를 따른다.

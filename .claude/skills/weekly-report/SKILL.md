@@ -23,7 +23,7 @@ gh run list --limit 20 --json conclusion,headBranch,createdAt
 ## 지표
 - 머지된 PR: N건
 - CI 통과율: N%
-- main 빌드 실패: N회
+- develop 빌드 실패: N회
 
 ## 다음 주
 (README 로드맵의 미완료 항목과 대조해서 제안한다)

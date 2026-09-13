@@ -17,7 +17,7 @@
 
 | 명령 | 하는 일 | 근거 문서 |
 |---|---|---|
-| `/release-check` | App Store 제출 전 검사 | `docs/app-store-submission.md` |
+| `/release-check` | App Store 제출 전 검사 | `docs/private/app-store-submission.md` (비공개) |
 | `/proxy-change` | 클라이언트·프록시 동시 변경 절차 | `proxy-vercel/AGENTS.md` |
 | `/weekly-report` | 커밋 기반 주간 보고서 | — |
 

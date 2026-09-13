@@ -22,7 +22,12 @@
       "Read(./.env)",
       "Read(./**/.env.*)",
       "Read(./proxy-vercel/.vercel/**)",
-      "Read(./proxy/.wrangler/**)"
+      "Read(./proxy/.wrangler/**)",
+      "Read(./docs/hansung/**)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(npx vercel --prod:*)"
     ]
   }
 }

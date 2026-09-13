@@ -3,9 +3,9 @@
 ## 프롬프트
 
 ```
-현재 브랜치와 main의 차이를 보고 PR 설명을 작성해줘.
+현재 브랜치와 develop의 차이를 보고 PR 설명을 작성해줘.
 
-git diff main...HEAD 와 git log main..HEAD 를 먼저 읽어.
+git diff origin/develop...HEAD 와 git log origin/develop..HEAD 를 먼저 읽어.
 
 형식은 .github/pull_request_template.md 를 따르되:
 - "무엇을 바꿨나"는 한두 줄. 파일 나열이 아니라 의도를 쓸 것

@@ -45,8 +45,7 @@
 
 ## 알아야 사고를 피하는 것
 
-- **캡처 결과는 JPEG다.** `ScreenCapturer.swift` 상단 주석이 PNG라고 적혀 있지만 틀렸다.
-  실제로는 `compressionFactor 0.82`, 최대 2000px로 축소한다.
+- **캡처 결과는 JPEG다.** PNG를 가정하지 않는다. `compressionFactor 0.82`, 최대 2000px로 축소한다.
 - **좌표계가 2개다.** AppKit은 좌하단 원점, 디스플레이 로컬은 좌상단 원점이다.
   `ScreenCapturer`에서 변환하고, `PanelPosition.origin`은 AppKit 기준을 가정한다. 다중 모니터 버그의 단골 원인.
 - **`LSUIElement = true`**라 Dock 아이콘이 없다. 창을 띄우려면 `NSApp.activate(ignoringOtherApps:)`,

@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [develop, main]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -33,7 +33,7 @@ jobs:
             fi
           }
           check Paxo/Secrets.swift
-          for p in $(git ls-files 'docs/hansung/*' '*/node_modules/*' 'node_modules/*' '*.vercel/*' '*.wrangler/*'); do
+          for p in $(git ls-files 'docs/hansung/*' 'docs/private/*' '*/node_modules/*' 'node_modules/*' '*.vercel/*' '*.wrangler/*'); do
             echo "::error file=$p::$p 은(는) 커밋하면 안 되는 경로입니다"
             fail=1
           done

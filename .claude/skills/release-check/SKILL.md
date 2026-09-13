@@ -5,7 +5,7 @@ description: App Store 제출 전 검사. 버전 번호, 서명 팀, StoreKit �
 
 # 제출 전 검사
 
-`docs/app-store-submission.md`가 전체 절차다. 이 스킬은 **코드에서 기계적으로 확인 가능한 것**만 본다.
+전체 절차는 비공개 저장소의 `docs/private/app-store-submission.md`다 (`paxo-app/internal`). 이 스킬은 **코드에서 기계적으로 확인 가능한 것**만 본다.
 
 ## 1. 버전
 
