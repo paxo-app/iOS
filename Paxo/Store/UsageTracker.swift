@@ -10,6 +10,13 @@ struct UsageTracker {
     private let countKey = "usage.count"
     private let dayKey = "usage.day"
 
+    /// 테스트에서 격리된 저장소를 주입하기 위한 지점. 앱에서는 항상 기본값을 쓴다.
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
     private var today: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -19,7 +26,6 @@ struct UsageTracker {
     }
 
     func usedToday() -> Int {
-        let defaults = UserDefaults.standard
         guard defaults.string(forKey: dayKey) == today else { return 0 }
         return defaults.integer(forKey: countKey)
     }
@@ -29,7 +35,6 @@ struct UsageTracker {
     }
 
     func recordUse() {
-        let defaults = UserDefaults.standard
         if defaults.string(forKey: dayKey) != today {
             defaults.set(today, forKey: dayKey)
             defaults.set(0, forKey: countKey)
