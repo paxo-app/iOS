@@ -29,8 +29,13 @@ node_modules/
 # Vercel
 .vercel
 
-# 로컬 시크릿
+# 로컬 시크릿 — Config/Secrets.example.swift를 복사해서 만든다
 Paxo/Secrets.swift
 
+# 비공개 문서 — 사업계획서·신청서, 비공개 저장소 paxo-app/internal의 clone
 docs/hansung
 docs/private
+
+# AI 도구 로컬 설정 (팀 공유는 .claude/settings.json)
+.claude/settings.local.json
+CLAUDE.local.md
