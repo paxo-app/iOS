@@ -6,9 +6,20 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		D0BE000000000000000000BA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D0BE000000000000000000AA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D0BE000000000000000000A6;
+			remoteInfo = Paxo;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		B729AD56300E6FFC0012D210 /* Paxo.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; name = Paxo.storekit; path = Config/Paxo.storekit; sourceTree = "<group>"; };
 		D0BE000000000000000000A2 /* Paxo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Paxo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D0BE000000000000000000B0 /* PaxoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PaxoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -17,10 +28,22 @@
 			path = Paxo;
 			sourceTree = "<group>";
 		};
+		D0BE000000000000000000B1 /* PaxoTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PaxoTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		D0BE000000000000000000A3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D0BE000000000000000000B4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -35,6 +58,7 @@
 			children = (
 				B729AD56300E6FFC0012D210 /* Paxo.storekit */,
 				D0BE000000000000000000A1 /* Paxo */,
+				D0BE000000000000000000B1 /* PaxoTests */,
 				D0BE000000000000000000A5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +67,7 @@
 			isa = PBXGroup;
 			children = (
 				D0BE000000000000000000A2 /* Paxo.app */,
+				D0BE000000000000000000B0 /* PaxoTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -72,6 +97,29 @@
 			productReference = D0BE000000000000000000A2 /* Paxo.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D0BE000000000000000000B2 /* PaxoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0BE000000000000000000B6 /* Build configuration list for PBXNativeTarget "PaxoTests" */;
+			buildPhases = (
+				D0BE000000000000000000B3 /* Sources */,
+				D0BE000000000000000000B4 /* Frameworks */,
+				D0BE000000000000000000B5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D0BE000000000000000000B9 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D0BE000000000000000000B1 /* PaxoTests */,
+			);
+			name = PaxoTests;
+			packageProductDependencies = (
+			);
+			productName = PaxoTests;
+			productReference = D0BE000000000000000000B0 /* PaxoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -84,6 +132,10 @@
 				TargetAttributes = {
 					D0BE000000000000000000A6 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					D0BE000000000000000000B2 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = D0BE000000000000000000A6;
 					};
 				};
 			};
@@ -103,12 +155,20 @@
 			projectRoot = "";
 			targets = (
 				D0BE000000000000000000A6 /* Paxo */,
+				D0BE000000000000000000B2 /* PaxoTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		D0BE000000000000000000A9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D0BE000000000000000000B5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -125,7 +185,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D0BE000000000000000000B3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D0BE000000000000000000B9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0BE000000000000000000A6 /* Paxo */;
+			targetProxy = D0BE000000000000000000BA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		D0BE000000000000000000AC /* Debug */ = {
@@ -180,6 +255,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L3JLLU88WG;
 				ENABLE_HARDENED_RUNTIME = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = "*.md";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -203,6 +279,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = L3JLLU88WG;
 				ENABLE_HARDENED_RUNTIME = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = "*.md";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -213,6 +290,38 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.hyeseong.Paxo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		D0BE000000000000000000B7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = L3JLLU88WG;
+				EXCLUDED_SOURCE_FILE_NAMES = "*.md";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hyeseong.PaxoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Paxo.app/Contents/MacOS/Paxo";
+			};
+			name = Debug;
+		};
+		D0BE000000000000000000B8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = L3JLLU88WG;
+				EXCLUDED_SOURCE_FILE_NAMES = "*.md";
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hyeseong.PaxoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Paxo.app/Contents/MacOS/Paxo";
 			};
 			name = Release;
 		};
@@ -233,6 +342,15 @@
 			buildConfigurations = (
 				D0BE000000000000000000AC /* Debug */,
 				D0BE000000000000000000AD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D0BE000000000000000000B6 /* Build configuration list for PBXNativeTarget "PaxoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0BE000000000000000000B7 /* Debug */,
+				D0BE000000000000000000B8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
