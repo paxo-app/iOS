@@ -5,7 +5,7 @@ import Foundation
 enum DefaultConfig {
     /// 기본 프록시 URL (설정에서 사용자가 입력하면 그 값이 우선)
     /// Vercel(미국 리전 고정) — Cloudflare Workers는 Gemini 지역 차단이 간헐 발생해 백업으로만 유지
-    static let proxyURL = "https://paxo-proxy.vercel.app"
+    static let proxyURL = "https://api.paxo.co.kr"
 
     /// 개인정보 처리방침 (프록시 워커가 /privacy 경로로 서빙)
     static let privacyPolicyURL = proxyURL + "/privacy"
