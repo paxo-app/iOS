@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
     const body = buildUpstreamBody(req.body);
 
-    const model = process.env.MODEL || "gemini-2.5-flash";
+    const model = process.env.MODEL || "gemini-3.6-flash";
     const upstream = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
       method: "POST",
       headers: {
@@ -59,6 +59,17 @@ export default async function handler(req, res) {
         .setHeader("content-type", "application/json")
         .send(text);
     }
+    // Gemini의 원문은 사용자에게 노출하지 않되, 운영 로그에서 키·모델·권한 문제를 구분한다.
+    const diagnostic = upstreamDiagnostic(text);
+    console.error(
+      JSON.stringify({
+        event: "gemini_upstream_error",
+        status: upstream.status,
+        providerStatus: diagnostic.providerStatus,
+        providerCode: diagnostic.providerCode,
+        providerMessage: diagnostic.providerMessage,
+      })
+    );
     return fail(res, 502, "upstream error");
   } catch (err) {
     if (err && (err.name === "TimeoutError" || err.name === "AbortError")) {
@@ -67,6 +78,24 @@ export default async function handler(req, res) {
     if (err && err.status === 400) return fail(res, 400, err.message);
     console.error("generate error:", err && err.message);
     return fail(res, 500, "internal error");
+  }
+}
+
+function upstreamDiagnostic(text) {
+  try {
+    const parsed = JSON.parse(text);
+    const error = parsed && typeof parsed === "object" ? parsed.error : null;
+    if (!error || typeof error !== "object") {
+      return { providerStatus: "unknown", providerCode: null, providerMessage: "unknown" };
+    }
+    return {
+      providerStatus: typeof error.status === "string" ? error.status : "unknown",
+      providerCode: Number.isInteger(error.code) ? error.code : null,
+      providerMessage:
+        typeof error.message === "string" ? error.message.slice(0, 300) : "unknown",
+    };
+  } catch {
+    return { providerStatus: "unknown", providerCode: null, providerMessage: "unknown" };
   }
 }
 
