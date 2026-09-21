@@ -80,8 +80,9 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
+                Toggle("Gemini 직접 호출 (프록시 우회)", isOn: $appState.useDirectGemini)
                 SecureField("Gemini API 키 (직접 호출용)", text: $appState.apiKey)
-                Text("프록시가 없을 때만 사용하는 개발용 키. 키체인에 저장됩니다.")
+                Text("켜면 프록시 URL을 무시하고 이 키로 Gemini를 직접 호출합니다. 키는 키체인에 저장됩니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

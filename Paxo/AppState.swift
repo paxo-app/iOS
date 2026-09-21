@@ -88,14 +88,20 @@ final class AppState: ObservableObject {
         }
     }
     private var isSyncingLaunchAtLogin = false
-    /// 프록시 서버 URL. 설정되어 있으면 API 키 없이 프록시를 경유해 호출한다. (proxy/ 참고)
+    /// 프록시 서버 URL. 직접 호출이 꺼져 있으면 이 값을 우선 사용한다.
     @Published var proxyURL: String {
         didSet { UserDefaults.standard.set(proxyURL, forKey: "proxyURL") }
     }
-    /// 개발용 직접 호출 키. 프록시 URL이 비어 있을 때만 사용된다.
+    /// 개발용 직접 호출 키. 키체인에만 보관한다.
     @Published var apiKey: String {
         didSet { KeychainHelper.save(key: "gemini-api-key", value: apiKey) }
     }
+    #if DEBUG
+    /// 프록시 장애와 Gemini API 설정을 독립적으로 확인하기 위한 개발용 선택지.
+    @Published var useDirectGemini: Bool {
+        didSet { UserDefaults.standard.set(useDirectGemini, forKey: "useDirectGemini") }
+    }
+    #endif
 
     /// 프록시의 사용량 집계용 익명 기기 식별자
     let deviceID: String
@@ -145,6 +151,9 @@ final class AppState: ObservableObject {
         }
         proxyURL = UserDefaults.standard.string(forKey: "proxyURL") ?? ""
         apiKey = KeychainHelper.load(key: "gemini-api-key") ?? ""
+        #if DEBUG
+        useDirectGemini = UserDefaults.standard.bool(forKey: "useDirectGemini")
+        #endif
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
 
         if let existing = UserDefaults.standard.string(forKey: "deviceID") {
@@ -313,7 +322,16 @@ final class AppState: ObservableObject {
     }
 
     private func makeService() -> GeminiService {
-        GeminiService(apiKey: apiKey, proxyURL: proxyURL, deviceID: deviceID)
+        #if DEBUG
+        GeminiService(
+            apiKey: apiKey,
+            proxyURL: proxyURL,
+            deviceID: deviceID,
+            useDirectGemini: useDirectGemini
+        )
+        #else
+        GeminiService(apiKey: apiKey, proxyURL: proxyURL, deviceID: deviceID, useDirectGemini: false)
+        #endif
     }
 
     private func upsertHistory() {

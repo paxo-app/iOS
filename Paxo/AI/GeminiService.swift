@@ -2,14 +2,17 @@ import Foundation
 
 /// AI 호출 서비스.
 ///
-/// 릴리즈 빌드는 항상 프록시(paxo-proxy.vercel.app) 경유로 호출한다 — 앱에 Gemini 키를 두지 않는다.
-/// 개발(DEBUG) 빌드에서만, 설정에서 프록시 URL을 비우고 API 키를 넣으면 Gemini를 직접 호출할 수 있다.
+/// 릴리즈 빌드는 항상 프록시(api.paxo.co.kr) 경유로 호출한다 — 앱에 Gemini 키를 두지 않는다.
+/// 개발(DEBUG) 빌드에서만 명시적으로 직접 호출을 선택하면 Gemini API를 호출할 수 있다.
 struct GeminiService {
     let apiKey: String
     let proxyURL: String
     let deviceID: String
+    let useDirectGemini: Bool
 
+    #if DEBUG
     private static let model = "gemini-2.5-flash"
+    #endif
 
     /// 타임아웃을 설정한 공용 세션 (요청 30s / 리소스 90s)
     private static let session: URLSession = {
@@ -34,22 +37,26 @@ struct GeminiService {
         return user.isEmpty ? DefaultConfig.proxyURL : user
     }
 
-    private func makeRequest() throws -> URLRequest {
-        let proxy = effectiveProxyURL
-
-        if !proxy.isEmpty {
-            let base = proxy.hasSuffix("/") ? String(proxy.dropLast()) : proxy
-            guard let url = URL(string: base + "/generate") else {
-                throw GeminiError.badURL
-            }
-            var request = URLRequest(url: url)
-            request.setValue(deviceID, forHTTPHeaderField: "x-paxo-device")
-            request.setValue(DefaultConfig.appToken, forHTTPHeaderField: "x-paxo-token")
-            return request
-        }
-
+    func makeRequest() throws -> URLRequest {
         #if DEBUG
-        // 개발 빌드 전용: 프록시를 비우고 API 키를 넣었을 때만 Gemini 직접 호출
+        if useDirectGemini {
+            return try makeDirectRequest()
+        }
+        #endif
+
+        let proxy = effectiveProxyURL
+        let base = proxy.hasSuffix("/") ? String(proxy.dropLast()) : proxy
+        guard let url = URL(string: base + "/generate") else {
+            throw GeminiError.badURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue(deviceID, forHTTPHeaderField: "x-paxo-device")
+        request.setValue(DefaultConfig.appToken, forHTTPHeaderField: "x-paxo-token")
+        return request
+    }
+
+    #if DEBUG
+    private func makeDirectRequest() throws -> URLRequest {
         guard !apiKey.isEmpty else {
             throw GeminiError.missingKey
         }
@@ -63,11 +70,8 @@ struct GeminiService {
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         return request
-        #else
-        // 릴리즈 빌드는 반드시 프록시 경유 — 여기 도달하면 설정 오류
-        throw GeminiError.badURL
-        #endif
     }
+    #endif
 
     private func generate(prompt: String, imageData: Data) async throws -> String {
         var request = try makeRequest()
