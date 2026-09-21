@@ -67,6 +67,7 @@ export default async function handler(req, res) {
         status: upstream.status,
         providerStatus: diagnostic.providerStatus,
         providerCode: diagnostic.providerCode,
+        providerMessage: diagnostic.providerMessage,
       })
     );
     return fail(res, 502, "upstream error");
@@ -85,14 +86,16 @@ function upstreamDiagnostic(text) {
     const parsed = JSON.parse(text);
     const error = parsed && typeof parsed === "object" ? parsed.error : null;
     if (!error || typeof error !== "object") {
-      return { providerStatus: "unknown", providerCode: null };
+      return { providerStatus: "unknown", providerCode: null, providerMessage: "unknown" };
     }
     return {
       providerStatus: typeof error.status === "string" ? error.status : "unknown",
       providerCode: Number.isInteger(error.code) ? error.code : null,
+      providerMessage:
+        typeof error.message === "string" ? error.message.slice(0, 300) : "unknown",
     };
   } catch {
-    return { providerStatus: "unknown", providerCode: null };
+    return { providerStatus: "unknown", providerCode: null, providerMessage: "unknown" };
   }
 }
 
