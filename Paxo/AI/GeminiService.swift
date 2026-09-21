@@ -11,7 +11,7 @@ struct GeminiService {
     let useDirectGemini: Bool
 
     #if DEBUG
-    private static let model = "gemini-2.5-flash"
+    private static let model = "gemini-3.6-flash"
     #endif
 
     /// 타임아웃을 설정한 공용 세션 (요청 30s / 리소스 90s)

@@ -65,7 +65,7 @@ x-paxo-token:  <공유 시크릿(Shared Secret)>
 | `GEMINI_API_KEY` | **필수** | — | 누락 시 서버 구동 불가 (HTTP 500 에러 발생) |
 | `APP_TOKEN` | 선택 | 없음 | 설정된 경우에만 클라이언트 토큰 검증 로직이 활성화됨 |
 | `APP_TOKEN_PREV` | 선택 | 없음 | 구버전 하위 호환 및 토큰 로테이션 목적의 예비 슬롯 |
-| `MODEL` | 선택 | `gemini-2.5-flash` | 호출할 업스트림 LLM 모델 지정 |
+| `MODEL` | 선택 | `gemini-3.6-flash` | 호출할 업스트림 LLM 모델 지정 |
 
 ## 5. 코드 스타일 (Code Convention)
 

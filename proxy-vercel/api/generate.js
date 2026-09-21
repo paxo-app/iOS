@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
     const body = buildUpstreamBody(req.body);
 
-    const model = process.env.MODEL || "gemini-2.5-flash";
+    const model = process.env.MODEL || "gemini-3.6-flash";
     const upstream = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
       method: "POST",
       headers: {

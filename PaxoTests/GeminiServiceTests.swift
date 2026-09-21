@@ -34,7 +34,7 @@ struct GeminiServiceTests {
         let request = try service.makeRequest()
 
         #expect(request.url?.host == "generativelanguage.googleapis.com")
-        #expect(request.url?.path.contains("gemini-2.5-flash:generateContent") == true)
+        #expect(request.url?.path.contains("gemini-3.6-flash:generateContent") == true)
         #expect(request.value(forHTTPHeaderField: "x-goog-api-key") == "development-key")
         #expect(request.value(forHTTPHeaderField: "x-paxo-token") == nil)
     }
