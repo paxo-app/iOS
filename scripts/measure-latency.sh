@@ -127,7 +127,9 @@ def sec(value, digits):
 print(f"{'구분':<22}{'성공/전체':>10}{'새 연결':>8}{'TLS까지 p50':>13}{'총 p50':>9}{'총 p90':>9}")
 for mode, req in [("cold", "answer"), ("warm", "answer"), ("cold", "explanation"), ("warm", "prewarm_get")]:
     group = [r for r in rows if r["mode"] == mode and r["request"] == req]
-    ok = [r for r in group if r["http_code"] in ("200", "405")]
+    # 예열 GET은 405가 정상이다. 정답 · 해설 POST에서 405는 실패다.
+    expected = ("405",) if req == "prewarm_get" else ("200",)
+    ok = [r for r in group if r["http_code"] in expected]
     total = [float(r["total_s"]) for r in ok]
     tls = [float(r["tls_s"]) for r in ok]
     conns = sum(int(r["new_connections"]) for r in group)

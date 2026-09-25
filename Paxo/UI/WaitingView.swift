@@ -36,11 +36,18 @@ struct ExplanationWaitingView: View {
                 .opacity(dimmed ? 0.45 : 1)
             }
         }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                dimmed = true
-            }
+        .onAppear { updatePulse() }
+        .onChange(of: reduceMotion) { updatePulse() }
+    }
+
+    /// 대기 도중 "동작 줄이기"를 켜도 반복 애니메이션이 바로 멈추도록, 애니메이션 없이 값을 되돌린다
+    private func updatePulse() {
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { dimmed = false }
+        guard !reduceMotion else { return }
+        withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+            dimmed = true
         }
     }
 

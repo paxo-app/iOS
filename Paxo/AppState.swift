@@ -267,14 +267,21 @@ final class AppState: ObservableObject {
 
     private func runSolve() async {
         toastDismissTask?.cancel()
+        // 영역을 고르는 동안 기록으로 화면을 바꿀 수 있으므로 소유권은 캡처 전부터 잡는다
+        let requestID = requestGate.begin()
         let capture: ScreenCapturer.Capture
         do {
-            guard let captured = try await capturer.captureInteractive(mode: captureMode) else {
+            let captured = try await capturer.captureInteractive(mode: captureMode)
+            guard requestGate.isCurrent(requestID) else { return }
+            guard let captured else {
+                requestGate.finish(requestID)
                 phase = .idle
                 return
             }
             capture = captured
         } catch {
+            guard requestGate.isCurrent(requestID) else { return }
+            requestGate.finish(requestID)
             toast.dismiss()
             phase = .failedAnswer(errorMessage(from: error))
             resultPanel.show(appState: self, on: lastCaptureScreen)
@@ -285,7 +292,6 @@ final class AppState: ObservableObject {
         let result = SolveResult(preset: preset)
         cacheImage(capture.data, for: result.id)
         current = result
-        let requestID = requestGate.begin()
         waitingSince = Date()
         phase = .solvingAnswer
         presentSolving()
@@ -355,6 +361,8 @@ final class AppState: ObservableObject {
     }
 
     private func runExplanation(requestID: UUID) async {
+        // 예약만 되고 실행 전에 취소된 작업이 새 화면을 건드리지 않게 한다
+        guard requestGate.isCurrent(requestID), !Task.isCancelled else { return }
         guard let current,
             let image = imageCache[current.id],
             let answer = current.answer,
