@@ -298,7 +298,7 @@ final class AppState: ObservableObject {
         phase = .solvingExplanation
         do {
             let explanation = try await makeService()
-                .explain(imageData: image, answer: answer, preset: preset)
+                .explain(imageData: image, answer: answer, preset: current.preset)
             self.current?.explanation = explanation
             phase = .done
             upsertHistory()
