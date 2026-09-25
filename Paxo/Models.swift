@@ -111,3 +111,56 @@ struct SolveResult: Identifiable, Codable, Equatable {
         self.preset = preset
     }
 }
+
+/// 응답을 기다리는 동안의 안내 단계.
+/// 스피너만 돌면 멈춘 것처럼 느껴져서, 기다린 시간에 맞춰 문구를 바꾸고 오래 걸리면 취소를 연다.
+enum WaitingStage: CaseIterable, Equatable {
+    case reading
+    case thinking
+    case finishing
+    case slow
+    case explaining
+
+    /// 이 시간을 넘기면 오래 걸린다고 알리고 취소 버튼을 보여준다
+    static let slowThreshold: TimeInterval = 15
+
+    /// 정답 대기. 시계가 뒤로 가서 음수가 나와도 첫 단계로 본다.
+    static func answerStage(elapsed: TimeInterval) -> WaitingStage {
+        switch elapsed {
+        case ..<3: return .reading
+        case ..<8: return .thinking
+        case ..<slowThreshold: return .finishing
+        default: return .slow
+        }
+    }
+
+    static func explanationStage(elapsed: TimeInterval) -> WaitingStage {
+        elapsed < slowThreshold ? .explaining : .slow
+    }
+
+    var message: String {
+        switch self {
+        case .reading: return "문제를 읽고 있어요"
+        case .thinking: return "풀이를 떠올리는 중이에요"
+        case .finishing: return "거의 다 됐어요"
+        case .slow: return "조금 오래 걸리고 있어요"
+        case .explaining: return "해설을 정리하고 있어요"
+        }
+    }
+
+    var detail: String? {
+        self == .slow ? "복잡한 문제일수록 시간이 더 걸려요." : nil
+    }
+
+    var symbolName: String {
+        switch self {
+        case .reading: return "eye"
+        case .thinking: return "lightbulb"
+        case .finishing: return "pencil"
+        case .slow: return "hourglass"
+        case .explaining: return "book"
+        }
+    }
+
+    var allowsCancel: Bool { self == .slow }
+}

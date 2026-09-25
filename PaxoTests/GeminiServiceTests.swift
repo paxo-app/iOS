@@ -22,6 +22,21 @@ struct GeminiServiceTests {
         #expect(request.value(forHTTPHeaderField: "x-goog-api-key") == nil)
     }
 
+    /// 취소를 네트워크 오류로 감싸면 사용자가 누른 취소가 "네트워크 오류" 화면으로 보인다.
+    @Test func 취소된_요청은_취소로_분류된다() {
+        let error = GeminiService.classify(URLError(.cancelled))
+        #expect(error is CancellationError)
+    }
+
+    @Test func 다른_네트워크_오류는_그대로_네트워크_오류다() {
+        let error = GeminiService.classify(URLError(.timedOut))
+        guard case GeminiError.network(let underlying)? = error as? GeminiError else {
+            Issue.record("GeminiError.network가 아니다: \(error)")
+            return
+        }
+        #expect(underlying.code == .timedOut)
+    }
+
     #if DEBUG
     @Test func 직접_호출은_프록시를_우회하고_Gemini_키를_사용한다() throws {
         let service = GeminiService(

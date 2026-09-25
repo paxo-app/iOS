@@ -100,7 +100,7 @@ struct GeminiService {
         do {
             (data, response) = try await Self.session.data(for: request)
         } catch let error as URLError {
-            throw GeminiError.network(error)
+            throw Self.classify(error)
         }
 
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
@@ -125,6 +125,11 @@ struct GeminiService {
             throw GeminiError.emptyResponse
         }
         return text
+    }
+
+    /// 사용자가 취소한 요청은 네트워크 오류가 아니다. 오류 화면으로 보내지 않도록 취소로 구분한다.
+    static func classify(_ error: URLError) -> Error {
+        error.code == .cancelled ? CancellationError() : GeminiError.network(error)
     }
 
     private static func serverMessage(from data: Data) -> String? {

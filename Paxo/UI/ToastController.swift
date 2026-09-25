@@ -95,12 +95,7 @@ private struct ToastView: View {
     private var content: some View {
         switch appState.phase {
         case .capturing, .solvingAnswer:
-            HStack(spacing: 10) {
-                ProgressView().controlSize(.small)
-                Text("푸는 중…")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
+            ToastWaitingView()
         default:
             if let answer = appState.current?.answer {
                 Text(answer)
