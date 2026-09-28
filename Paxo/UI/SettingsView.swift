@@ -6,6 +6,34 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("계정") {
+                switch appState.authenticationPhase {
+                case .signedIn:
+                    Label("Apple로 로그인됨", systemImage: "person.crop.circle.badge.checkmark")
+                    Button("로그아웃") {
+                        appState.signOut()
+                    }
+                    Button("계정 삭제…", role: .destructive) {
+                        showsDeleteConfirmation = true
+                    }
+                case .failed(let message):
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                    Button("로그인 다시 준비") {
+                        appState.retryAppleSignInPreparation()
+                    }
+                case .preparing, .signingIn:
+                    ProgressView("Apple 로그인을 확인하는 중…")
+                case .signedOut:
+                    Text("메뉴 막대의 Paxo 메뉴에서 Apple로 로그인해주세요.")
+                        .foregroundStyle(.secondary)
+                }
+                Text("이름과 이메일은 요청하거나 저장하지 않습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("결과 표시") {
                 Picker("표시 방식", selection: $appState.resultDisplayMode) {
                     ForEach(ResultDisplayMode.allCases) { mode in
@@ -89,10 +117,16 @@ struct SettingsView: View {
             #endif
 
             Section("구독") {
-                if store.isPro {
-                    Label("Paxo Pro 사용 중", systemImage: "checkmark.seal.fill")
+                if appState.serverTier == .pro {
+                    Label(
+                        "Paxo Pro · 오늘 \(appState.remainingToday)회 남음",
+                        systemImage: "checkmark.seal.fill"
+                    )
                 } else {
-                    LabeledContent("무료 사용량", value: "하루 \(UsageTracker.dailyFreeLimit)회")
+                    LabeledContent(
+                        "무료 사용량",
+                        value: "오늘 \(appState.remainingToday)/\(UsagePolicy.dailyFreeLimit)회 남음"
+                    )
                     Button("Paxo Pro 알아보기…") {
                         appState.showPaywall()
                     }
@@ -129,5 +163,15 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 660)
+        .alert("Paxo 계정을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("계정 삭제", role: .destructive) {
+                appState.deleteAccount()
+            }
+        } message: {
+            Text("Apple 로그인 연결과 서버의 사용량 정보가 삭제되며 되돌릴 수 없습니다. 기기의 풀이 기록은 유지됩니다.")
+        }
     }
+
+    @State private var showsDeleteConfirmation = false
 }

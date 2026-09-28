@@ -1,20 +1,21 @@
 import Foundation
 
-/// AI 호출 서비스.
-///
-/// 릴리즈 빌드는 항상 프록시(api.paxo.co.kr) 경유로 호출한다 — 앱에 Gemini 키를 두지 않는다.
-/// 개발(DEBUG) 빌드에서만 명시적으로 직접 호출을 선택하면 Gemini API를 호출할 수 있다.
+struct GenerationResult {
+    let remainingToday: Int?
+    let resetAt: Date?
+    let text: String
+    let tier: ProxyTier?
+}
+
 struct GeminiService {
     let apiKey: String
     let proxyURL: String
-    let deviceID: String
     let useDirectGemini: Bool
 
     #if DEBUG
     private static let model = "gemini-3.6-flash"
     #endif
 
-    /// 타임아웃을 설정한 공용 세션 (요청 30s / 리소스 90s)
     private static let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -23,62 +24,83 @@ struct GeminiService {
         return URLSession(configuration: config)
     }()
 
-    func answer(imageData: Data, preset: SubjectPreset) async throws -> String {
-        try await generate(prompt: Prompts.answer(preset: preset), imageData: imageData)
+    func answer(
+        imageData: Data,
+        preset: SubjectPreset,
+        sessionToken: String,
+        solveID: UUID
+    ) async throws -> GenerationResult {
+        try await generate(
+            kind: .answer,
+            prompt: Prompts.answer(preset: preset),
+            imageData: imageData,
+            sessionToken: sessionToken,
+            solveID: solveID
+        )
     }
 
-    func explain(imageData: Data, answer: String, preset: SubjectPreset) async throws -> String {
-        try await generate(prompt: Prompts.explanation(preset: preset, answer: answer), imageData: imageData)
+    func explain(
+        imageData: Data,
+        answer: String,
+        preset: SubjectPreset,
+        sessionToken: String,
+        solveID: UUID
+    ) async throws -> GenerationResult {
+        try await generate(
+            kind: .explanation,
+            prompt: Prompts.explanation(preset: preset, answer: answer),
+            imageData: imageData,
+            sessionToken: sessionToken,
+            solveID: solveID
+        )
     }
 
-    /// 우선순위: 사용자가 설정한 프록시 → 내장 기본 프록시
-    private var effectiveProxyURL: String {
-        let user = proxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        return user.isEmpty ? DefaultConfig.proxyURL : user
-    }
-
-    func makeRequest() throws -> URLRequest {
+    func makeRequest(sessionToken: String) throws -> URLRequest {
         #if DEBUG
         if useDirectGemini {
             return try makeDirectRequest()
         }
+        let candidate = proxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let proxy = candidate.isEmpty ? DefaultConfig.proxyURL : candidate
+        #else
+        let proxy = DefaultConfig.proxyURL
         #endif
-
-        let proxy = effectiveProxyURL
         let base = proxy.hasSuffix("/") ? String(proxy.dropLast()) : proxy
-        guard let url = URL(string: base + "/generate") else {
+        guard let url = URL(string: base + "/generate"), url.scheme == "https" else {
             throw GeminiError.badURL
         }
         var request = URLRequest(url: url)
-        request.setValue(deviceID, forHTTPHeaderField: "x-paxo-device")
+        request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
         request.setValue(DefaultConfig.appToken, forHTTPHeaderField: "x-paxo-token")
         return request
     }
 
     #if DEBUG
     private func makeDirectRequest() throws -> URLRequest {
-        guard !apiKey.isEmpty else {
-            throw GeminiError.missingKey
-        }
+        guard !apiKey.isEmpty else { throw GeminiError.missingKey }
         guard
             let url = URL(
                 string: "https://generativelanguage.googleapis.com/v1beta/models/\(Self.model):generateContent"
             )
-        else {
-            throw GeminiError.badURL
-        }
+        else { throw GeminiError.badURL }
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         return request
     }
     #endif
 
-    private func generate(prompt: String, imageData: Data) async throws -> String {
-        var request = try makeRequest()
+    private func generate(
+        kind: GenerationKind,
+        prompt: String,
+        imageData: Data,
+        sessionToken: String,
+        solveID: UUID
+    ) async throws -> GenerationResult {
+        var request = try makeRequest(sessionToken: sessionToken)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "contents": [
                 [
                     "parts": [
@@ -93,6 +115,17 @@ struct GeminiService {
                 ]
             ]
         ]
+        #if DEBUG
+        if useDirectGemini {
+            body["generationConfig"] = ["maxOutputTokens": kind == .answer ? 256 : 1024]
+        } else {
+            body["kind"] = kind.rawValue
+            body["solveId"] = solveID.uuidString.lowercased()
+        }
+        #else
+        body["kind"] = kind.rawValue
+        body["solveId"] = solveID.uuidString.lowercased()
+        #endif
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let data: Data
@@ -103,12 +136,20 @@ struct GeminiService {
             throw GeminiError.network(error)
         }
 
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            if code == 429 {
-                throw GeminiError.rateLimited
+        guard let http = response as? HTTPURLResponse else { throw GeminiError.http(-1, nil) }
+        guard http.statusCode == 200 else {
+            let code = Self.serverCode(from: data)
+            switch (http.statusCode, code) {
+            case (401, _): throw GeminiError.invalidSession
+            case (429, "daily_limit"):
+                if http.value(forHTTPHeaderField: "x-paxo-tier") == ProxyTier.pro.rawValue {
+                    throw GeminiError.proDailyLimit
+                }
+                throw GeminiError.freeDailyLimit
+            case (429, _): throw GeminiError.rateLimited
+            case (502, _), (503, _), (504, _): throw GeminiError.serviceUnavailable
+            default: throw GeminiError.http(http.statusCode, Self.serverMessage(from: data))
             }
-            throw GeminiError.http(code, Self.serverMessage(from: data))
         }
 
         let decoded = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
@@ -120,20 +161,38 @@ struct GeminiService {
             .compactMap(\.text)
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !text.isEmpty else { throw GeminiError.emptyResponse }
+        return GenerationResult(
+            remainingToday: http.value(forHTTPHeaderField: "x-paxo-remaining").flatMap(Int.init),
+            resetAt: Self.date(from: http.value(forHTTPHeaderField: "x-paxo-reset-at")),
+            text: text,
+            tier: http.value(forHTTPHeaderField: "x-paxo-tier").flatMap(ProxyTier.init)
+        )
+    }
 
-        guard !text.isEmpty else {
-            throw GeminiError.emptyResponse
-        }
-        return text
+    private static func serverCode(from data: Data) -> String? {
+        errorEnvelope(from: data)?.error?.code
     }
 
     private static func serverMessage(from data: Data) -> String? {
-        struct ErrorEnvelope: Decodable {
-            struct Inner: Decodable { let message: String? }
-            let error: Inner?
-        }
-        return (try? JSONDecoder().decode(ErrorEnvelope.self, from: data))?.error?.message
+        errorEnvelope(from: data)?.error?.message
     }
+
+    private static func errorEnvelope(from data: Data) -> ErrorEnvelope? {
+        try? JSONDecoder().decode(ErrorEnvelope.self, from: data)
+    }
+
+    private static func date(from value: String?) -> Date? {
+        guard let value else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return withFraction.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
+}
+
+private enum GenerationKind: String {
+    case answer
+    case explanation
 }
 
 private struct GenerateContentResponse: Decodable {
@@ -143,29 +202,42 @@ private struct GenerateContentResponse: Decodable {
     let candidates: [Candidate]?
 }
 
+private struct ErrorEnvelope: Decodable {
+    struct Inner: Decodable {
+        let code: String?
+        let message: String?
+    }
+
+    let error: Inner?
+}
+
 enum GeminiError: LocalizedError {
-    case missingKey
     case badURL
-    case http(Int, String?)
-    case rateLimited
     case emptyResponse
+    case freeDailyLimit
+    case http(Int, String?)
+    case invalidSession
+    case missingKey
     case network(URLError)
+    case proDailyLimit
+    case rateLimited
+    case serviceUnavailable
 
     var errorDescription: String? {
         switch self {
-        case .missingKey:
-            return "AI 연결이 설정되지 않았습니다. 설정에서 프록시 URL 또는 API 키를 입력해주세요."
         case .badURL:
             return "AI 연결 설정에 문제가 있습니다. 잠시 후 다시 시도해주세요."
-        case .http(let code, let message):
-            if let message, !message.isEmpty {
-                return message
-            }
-            return "서버 오류가 발생했습니다. (HTTP \(code)) 잠시 후 다시 시도해주세요."
-        case .rateLimited:
-            return "오늘 사용량을 다 썼거나 요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
         case .emptyResponse:
             return "AI 응답이 비어 있습니다. 다시 시도해주세요."
+        case .freeDailyLimit:
+            return "오늘 무료 풀이 3회를 모두 사용했습니다. Pro로 업그레이드하거나 내일 다시 이용해주세요."
+        case .http(let code, let message):
+            if let message, !message.isEmpty { return message }
+            return "서버 오류가 발생했습니다. (HTTP \(code)) 잠시 후 다시 시도해주세요."
+        case .invalidSession:
+            return "로그인 세션이 만료되었습니다. 다시 시도해주세요."
+        case .missingKey:
+            return "개발용 Gemini API 키가 설정되지 않았습니다."
         case .network(let error):
             switch error.code {
             case .notConnectedToInternet, .dataNotAllowed:
@@ -177,6 +249,12 @@ enum GeminiError: LocalizedError {
             default:
                 return "네트워크 오류가 발생했습니다. 다시 시도해주세요."
             }
+        case .proDailyLimit:
+            return "Pro의 일일 안전 한도 100회를 모두 사용했습니다. 내일 다시 이용해주세요."
+        case .rateLimited:
+            return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+        case .serviceUnavailable:
+            return "AI 서버를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요."
         }
     }
 }

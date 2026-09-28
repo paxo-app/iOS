@@ -14,14 +14,19 @@ struct PaywallView: View {
                 .font(.title2.bold())
 
             if store.isPro {
-                Label("Pro 사용 중 — 무제한으로 풀이와 해설을 볼 수 있어요.", systemImage: "checkmark.seal.fill")
-                    .font(.callout)
-                    .multilineTextAlignment(.center)
+                Label(
+                    "Pro 사용 중 — 하루 최대 \(UsagePolicy.dailyProLimit)회 풀이할 수 있어요.",
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(.callout)
+                .multilineTextAlignment(.center)
             } else {
-                Text("무료 풀이는 하루 \(UsageTracker.dailyFreeLimit)회예요.\nPro로 업그레이드하면 풀이와 해설을 무제한으로 볼 수 있어요.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                Text(
+                    "무료 풀이는 하루 \(UsagePolicy.dailyFreeLimit)회예요.\nPro는 비용 보호를 위해 하루 최대 \(UsagePolicy.dailyProLimit)회 제공돼요."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
                 if store.products.isEmpty {
                     HStack(spacing: 8) {

@@ -2,22 +2,26 @@ import Combine
 import Foundation
 import StoreKit
 
+enum StoreProducts {
+    static let identifiers = [
+        "com.hyeseong.Paxo.pro.monthly",
+        "com.hyeseong.Paxo.pro.yearly",
+    ]
+}
+
 /// StoreKit 2 구독 관리.
 /// - 로컬 테스트: Config/Paxo.storekit (스킴 → Run → Options → StoreKit Configuration에서 선택)
 /// - 출시 전: App Store Connect에 동일한 product ID로 구독 상품 생성 필요
 @MainActor
 final class StoreManager: ObservableObject {
-    static let productIDs = [
-        "com.hyeseong.Paxo.pro.monthly",
-        "com.hyeseong.Paxo.pro.yearly",
-    ]
-
     @Published private(set) var products: [Product] = []
     @Published private(set) var isPro = false
     @Published private(set) var purchaseInFlight = false
     @Published var errorMessage: String?
 
+    var onEntitlementsChanged: (() async -> Void)?
     private var updatesTask: Task<Void, Never>?
+    private var hasLoadedEntitlements = false
 
     func start() {
         // 앱 실행 중 들어오는 트랜잭션(갱신, 환불, 다른 기기 구매 등) 반영
@@ -37,7 +41,7 @@ final class StoreManager: ObservableObject {
 
     func loadProducts() async {
         do {
-            products = try await Product.products(for: Self.productIDs)
+            products = try await Product.products(for: StoreProducts.identifiers)
                 .sorted { $0.price < $1.price }
         } catch {
             products = []
@@ -46,16 +50,21 @@ final class StoreManager: ObservableObject {
     }
 
     func refreshEntitlements() async {
+        let previous = isPro
         var pro = false
         for await entitlement in Transaction.currentEntitlements {
             if case .verified(let transaction) = entitlement,
-                Self.productIDs.contains(transaction.productID),
+                StoreProducts.identifiers.contains(transaction.productID),
                 transaction.revocationDate == nil
             {
                 pro = true
             }
         }
         isPro = pro
+        if hasLoadedEntitlements, previous != pro {
+            await onEntitlementsChanged?()
+        }
+        hasLoadedEntitlements = true
     }
 
     func purchase(_ product: Product) async {

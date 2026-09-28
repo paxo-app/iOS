@@ -19,6 +19,8 @@ struct ResultView: View {
         switch appState.phase {
         case .idle:
             placeholder("\(appState.hotkey.display) 를 눌러 화면 속 문제를 풀어보세요.")
+        case .checkingAccess:
+            loading("사용 가능 횟수를 확인하는 중…")
         case .capturing:
             placeholder(
                 appState.captureMode == .fullScreen
