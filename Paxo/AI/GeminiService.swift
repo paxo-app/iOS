@@ -61,7 +61,7 @@ struct GeminiService {
             return try makeDirectRequest()
         }
         let candidate = proxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let proxy = candidate.isEmpty ? DefaultConfig.proxyURL : candidate
+        let proxy = candidate.isEmpty ? DefaultConfig.developmentProxyURL : candidate
         #else
         let proxy = DefaultConfig.proxyURL
         #endif

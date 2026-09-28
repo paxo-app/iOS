@@ -12,7 +12,7 @@ struct ProxySessionManagerTests {
             if request.url?.path == "/session/challenge" {
                 return try response(request: request, status: 200, body: #"{"nonce":"raw-nonce"}"#)
             }
-            #expect(request.url?.absoluteString == "https://api.paxo.co.kr/session")
+            #expect(request.url?.absoluteString == "https://preview-api.paxo.co.kr/session")
             #expect(request.value(forHTTPHeaderField: "x-paxo-token") != nil)
             let requestBody = try #require(request.httpBody)
             let decoded = try JSONSerialization.jsonObject(with: requestBody)

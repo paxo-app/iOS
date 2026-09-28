@@ -161,7 +161,8 @@ final class AppState: ObservableObject {
             hotkey = .default
         }
         #if DEBUG
-        proxyURL = UserDefaults.standard.string(forKey: "proxyURL") ?? ""
+        proxyURL =
+            UserDefaults.standard.string(forKey: "proxyURL") ?? DefaultConfig.developmentProxyURL
         apiKey = KeychainHelper.load(key: "gemini-api-key") ?? ""
         useDirectGemini = UserDefaults.standard.bool(forKey: "useDirectGemini")
         #endif

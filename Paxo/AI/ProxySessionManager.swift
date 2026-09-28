@@ -294,7 +294,7 @@ final class ProxySessionManager {
     private func makeRequest(path: String) throws -> URLRequest {
         #if DEBUG
         let candidate = developmentProxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let baseURL = candidate.isEmpty ? DefaultConfig.proxyURL : candidate
+        let baseURL = candidate.isEmpty ? DefaultConfig.developmentProxyURL : candidate
         #else
         let baseURL = DefaultConfig.proxyURL
         #endif

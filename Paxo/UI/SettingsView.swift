@@ -102,9 +102,9 @@ struct SettingsView: View {
                 TextField(
                     "프록시 URL",
                     text: $appState.proxyURL,
-                    prompt: Text(DefaultConfig.proxyURL)
+                    prompt: Text(DefaultConfig.developmentProxyURL)
                 )
-                Text("비워두면 내장 기본 프록시(DefaultConfig)를 사용합니다.")
+                Text("비워두면 Preview 프록시를 사용합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

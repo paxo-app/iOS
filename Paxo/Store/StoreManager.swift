@@ -14,6 +14,7 @@ enum StoreProducts {
 /// - 출시 전: App Store Connect에 동일한 product ID로 구독 상품 생성 필요
 @MainActor
 final class StoreManager: ObservableObject {
+    @Published private(set) var eligibleIntroOfferProductIDs: Set<String> = []
     @Published private(set) var products: [Product] = []
     @Published private(set) var isPro = false
     @Published private(set) var purchaseInFlight = false
@@ -43,10 +44,16 @@ final class StoreManager: ObservableObject {
         do {
             products = try await Product.products(for: StoreProducts.identifiers)
                 .sorted { $0.price < $1.price }
+            await refreshIntroOfferEligibility()
         } catch {
+            eligibleIntroOfferProductIDs = []
             products = []
             errorMessage = "가격 정보를 불러오지 못했습니다: \(error.localizedDescription)"
         }
+    }
+
+    func isEligibleForIntroOffer(_ product: Product) -> Bool {
+        eligibleIntroOfferProductIDs.contains(product.id)
     }
 
     func refreshEntitlements() async {
@@ -61,6 +68,7 @@ final class StoreManager: ObservableObject {
             }
         }
         isPro = pro
+        await refreshIntroOfferEligibility()
         if hasLoadedEntitlements, previous != pro {
             await onEntitlementsChanged?()
         }
@@ -105,5 +113,17 @@ final class StoreManager: ObservableObject {
             errorMessage = "복원에 실패했습니다: \(error.localizedDescription)"
         }
         await refreshEntitlements()
+    }
+
+    private func refreshIntroOfferEligibility() async {
+        var eligibleProductIDs: Set<String> = []
+        for product in products {
+            guard let subscription = product.subscription,
+                subscription.introductoryOffer?.paymentMode == .freeTrial,
+                await subscription.isEligibleForIntroOffer
+            else { continue }
+            eligibleProductIDs.insert(product.id)
+        }
+        eligibleIntroOfferProductIDs = eligibleProductIDs
     }
 }

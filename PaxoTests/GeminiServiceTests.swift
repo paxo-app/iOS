@@ -22,6 +22,19 @@ struct GeminiServiceTests {
     }
 
     #if DEBUG
+    @Test("개발 프록시 주소가 비어 있으면 Preview를 사용한다")
+    func emptyDevelopmentProxyUsesPreview() throws {
+        let service = GeminiService(
+            apiKey: "",
+            proxyURL: "",
+            useDirectGemini: false
+        )
+
+        let request = try service.makeRequest(sessionToken: "session-token")
+
+        #expect(request.url?.absoluteString == "https://preview-api.paxo.co.kr/generate")
+    }
+
     @Test("개발용 직접 호출은 프록시를 우회한다")
     func directRequestUsesGeminiKey() throws {
         let service = GeminiService(

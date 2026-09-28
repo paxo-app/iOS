@@ -47,8 +47,8 @@ struct PaywallView: View {
                                     Text("\(product.displayPrice) \(periodLabel(product))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
-                                    if hasFreeTrial(product) {
-                                        Text("7일 무료 체험 포함")
+                                    if let freeTrialText = freeTrialText(product) {
+                                        Text(freeTrialText)
                                             .font(.caption2)
                                             .foregroundStyle(.tint)
                                     }
@@ -60,6 +60,13 @@ struct PaywallView: View {
                         }
                     }
                     .disabled(store.purchaseInFlight)
+
+                    if showsIntroOfferNotice {
+                        Text("무료 체험은 신규 구독자에게 같은 구독 그룹에서 한 번만 제공됩니다.")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
 
@@ -107,7 +114,26 @@ struct PaywallView: View {
         }
     }
 
-    private func hasFreeTrial(_ product: Product) -> Bool {
-        product.subscription?.introductoryOffer?.paymentMode == .freeTrial
+    private var showsIntroOfferNotice: Bool {
+        store.products.contains { store.isEligibleForIntroOffer($0) }
+    }
+
+    private func freeTrialText(_ product: Product) -> String? {
+        guard store.isEligibleForIntroOffer(product),
+            let offer = product.subscription?.introductoryOffer,
+            offer.paymentMode == .freeTrial,
+            let unit = periodUnitLabel(offer.period.unit)
+        else { return nil }
+        return "\(offer.period.value)\(unit) 무료 체험 포함"
+    }
+
+    private func periodUnitLabel(_ unit: Product.SubscriptionPeriod.Unit) -> String? {
+        switch unit {
+        case .day: return "일"
+        case .week: return "주"
+        case .month: return "개월"
+        case .year: return "년"
+        @unknown default: return nil
+        }
     }
 }
