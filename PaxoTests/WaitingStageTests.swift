@@ -36,9 +36,29 @@ struct WaitingStageTests {
         #expect(!stage.symbolName.isEmpty)
     }
 
-    /// 취소는 오래 걸릴 때만 연다. 처음부터 보이면 누르기 쉬워 멀쩡한 요청이 끊긴다.
+    /// 취소는 3초부터 연다. 캡처 직후 바로 보이면 실수로 눌러 멀쩡한 요청이 끊긴다.
+    /// 정답 대기와 해설 대기가 같은 기준을 쓴다.
+    @Test(arguments: [
+        (-1.0, false),
+        (0, false),
+        (2.9, false),
+        (3, true),
+        (15, true),
+        (60, true),
+    ])
+    func 취소는_3초부터_열린다(elapsed: TimeInterval, expected: Bool) {
+        #expect(WaitingStage.allowsCancel(elapsed: elapsed) == expected)
+    }
+
+    /// 실제 진행률을 모르므로 곧 끝난다고 약속하는 문구를 쓰지 않는다.
     @Test(arguments: WaitingStage.allCases)
-    func 취소는_느림_단계에서만_보인다(stage: WaitingStage) {
-        #expect(stage.allowsCancel == (stage == .slow))
+    func 완료를_약속하는_문구가_없다(stage: WaitingStage) {
+        #expect(!stage.message.contains("다 됐"))
+    }
+
+    /// 오래 걸린다는 설명은 취소와 별개로 15초부터만 보여준다.
+    @Test(arguments: WaitingStage.allCases)
+    func 설명은_느림_단계에서만_있다(stage: WaitingStage) {
+        #expect((stage.detail != nil) == (stage == .slow))
     }
 }

@@ -49,6 +49,10 @@ final class AppState: ObservableObject {
     @Published var toastDuration: Double {
         didSet { UserDefaults.standard.set(toastDuration, forKey: "toastDuration") }
     }
+    /// 토스트가 기다리는 동안의 모습 (단계 안내 / 간단히)
+    @Published var toastWaitingStyle: ToastWaitingStyle {
+        didSet { UserDefaults.standard.set(toastWaitingStyle.rawValue, forKey: "toastWaitingStyle") }
+    }
     /// 전역 단축키 (설정에서 변경 가능)
     @Published var hotkey: HotkeySpec {
         didSet {
@@ -153,6 +157,7 @@ final class AppState: ObservableObject {
         resultDisplayMode =
             ResultDisplayMode(rawValue: UserDefaults.standard.string(forKey: "resultDisplayMode") ?? "") ?? .panel
         toastDuration = UserDefaults.standard.object(forKey: "toastDuration") as? Double ?? 4.0
+        toastWaitingStyle = ToastWaitingStyle.restored(from: UserDefaults.standard.string(forKey: "toastWaitingStyle"))
         if let data = UserDefaults.standard.data(forKey: "hotkeySpec"),
             let spec = try? JSONDecoder().decode(HotkeySpec.self, from: data)
         {
@@ -267,6 +272,8 @@ final class AppState: ObservableObject {
 
     private func runSolve() async {
         toastDismissTask?.cancel()
+        // 작은 정답 토스트가 남은 채 넓은 대기 화면으로 바뀌면 잘린다. 대기 토스트는 요청 시작 때 새 크기로 다시 뜬다.
+        toast.dismiss()
         // 영역을 고르는 동안 기록으로 화면을 바꿀 수 있으므로 소유권은 캡처 전부터 잡는다
         let requestID = requestGate.begin()
         let capture: ScreenCapturer.Capture

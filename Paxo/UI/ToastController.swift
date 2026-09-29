@@ -9,8 +9,9 @@ final class ToastController {
 
     func show(appState: AppState, on screen: NSScreen? = nil) {
         let host = ensurePanel(appState: appState)
+        // 대기 모습은 띄우는 순간에 고정한다. 대기 중 설정을 바꿔도 이미 잰 토스트 크기와 어긋나지 않게.
         host.rootView = AnyView(
-            ToastView().environmentObject(appState).fixedSize()
+            ToastView(waitingStyle: appState.toastWaitingStyle).environmentObject(appState).fixedSize()
         )
 
         guard let panel, let screen = screen ?? NSScreen.main else { return }
@@ -79,6 +80,7 @@ final class ToastController {
 
 private struct ToastView: View {
     @EnvironmentObject private var appState: AppState
+    let waitingStyle: ToastWaitingStyle
 
     var body: some View {
         content
@@ -95,7 +97,7 @@ private struct ToastView: View {
     private var content: some View {
         switch appState.phase {
         case .capturing, .solvingAnswer:
-            ToastWaitingView()
+            ToastWaitingView(style: waitingStyle)
         default:
             if let answer = appState.current?.answer {
                 Text(answer)
