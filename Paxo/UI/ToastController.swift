@@ -38,9 +38,15 @@ final class ToastController {
         }
     }
 
-    func dismiss() {
+    /// 정답을 보여준 뒤에만 페이드로 닫는다. 취소 · 오류처럼 정답 없이 닫을 때 페이드하면
+    /// 그 사이 내용이 빈 자리("—")로 바뀌고 창도 그 크기로 줄어 작은 말풍선이 번쩍인다.
+    func dismiss(animated: Bool = true) {
         guard let panel, isVisible else { return }
         isVisible = false
+        guard animated else {
+            panel.orderOut(nil)
+            return
+        }
         NSAnimationContext.runAnimationGroup(
             { ctx in
                 ctx.duration = 0.3

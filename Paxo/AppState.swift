@@ -236,7 +236,7 @@ final class AppState: ObservableObject {
         // 진행 중인 요청은 먼저 끊는다. 두면 늦은 응답이 방금 연 기록을 덮어쓴다.
         cancelSolve()
         toastDismissTask?.cancel()
-        toast.dismiss()
+        toast.dismiss(animated: false)
         current = item
         phase = item.explanation == nil ? .answerReady : .done
         resultPanel.show(appState: self, on: Self.screenUnderMouse())
@@ -262,7 +262,7 @@ final class AppState: ObservableObject {
         case .solvingAnswer:
             phase = .idle
             resultPanel.hide()
-            toast.dismiss()
+            toast.dismiss(animated: false)
         case .solvingExplanation:
             phase = .answerReady
         default:
@@ -273,7 +273,7 @@ final class AppState: ObservableObject {
     private func runSolve() async {
         toastDismissTask?.cancel()
         // 작은 정답 토스트가 남은 채 넓은 대기 화면으로 바뀌면 잘린다. 대기 토스트는 요청 시작 때 새 크기로 다시 뜬다.
-        toast.dismiss()
+        toast.dismiss(animated: false)
         // 영역을 고르는 동안 기록으로 화면을 바꿀 수 있으므로 소유권은 캡처 전부터 잡는다
         let requestID = requestGate.begin()
         let capture: ScreenCapturer.Capture
@@ -289,7 +289,7 @@ final class AppState: ObservableObject {
         } catch {
             guard requestGate.isCurrent(requestID) else { return }
             requestGate.finish(requestID)
-            toast.dismiss()
+            toast.dismiss(animated: false)
             phase = .failedAnswer(errorMessage(from: error))
             resultPanel.show(appState: self, on: lastCaptureScreen)
             return
@@ -332,7 +332,7 @@ final class AppState: ObservableObject {
             guard requestGate.isCurrent(requestID) else { return }
             requestGate.finish(requestID)
             waitingSince = nil
-            toast.dismiss()
+            toast.dismiss(animated: false)
             if error is CancellationError {
                 phase = .idle
                 resultPanel.hide()
@@ -346,7 +346,7 @@ final class AppState: ObservableObject {
     private func presentSolving() {
         switch resultDisplayMode {
         case .panel:
-            toast.dismiss()
+            toast.dismiss(animated: false)
             resultPanel.show(appState: self, on: lastCaptureScreen)
         case .toast:
             resultPanel.hide()
