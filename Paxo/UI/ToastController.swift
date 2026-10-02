@@ -9,8 +9,9 @@ final class ToastController {
 
     func show(appState: AppState, on screen: NSScreen? = nil) {
         let host = ensurePanel(appState: appState)
+        // 대기 모습은 띄우는 순간에 고정한다. 대기 중 설정을 바꿔도 이미 잰 토스트 크기와 어긋나지 않게.
         host.rootView = AnyView(
-            ToastView().environmentObject(appState).fixedSize()
+            ToastView(waitingStyle: appState.toastWaitingStyle).environmentObject(appState).fixedSize()
         )
 
         guard let panel, let screen = screen ?? NSScreen.main else { return }
@@ -37,9 +38,15 @@ final class ToastController {
         }
     }
 
-    func dismiss() {
+    /// 정답을 보여준 뒤에만 페이드로 닫는다. 취소 · 오류처럼 정답 없이 닫을 때 페이드하면
+    /// 그 사이 내용이 빈 자리("—")로 바뀌고 창도 그 크기로 줄어 작은 말풍선이 번쩍인다.
+    func dismiss(animated: Bool = true) {
         guard let panel, isVisible else { return }
         isVisible = false
+        guard animated else {
+            panel.orderOut(nil)
+            return
+        }
         NSAnimationContext.runAnimationGroup(
             { ctx in
                 ctx.duration = 0.3
@@ -79,6 +86,7 @@ final class ToastController {
 
 private struct ToastView: View {
     @EnvironmentObject private var appState: AppState
+    let waitingStyle: ToastWaitingStyle
 
     var body: some View {
         content
@@ -95,12 +103,7 @@ private struct ToastView: View {
     private var content: some View {
         switch appState.phase {
         case .capturing, .solvingAnswer:
-            HStack(spacing: 10) {
-                ProgressView().controlSize(.small)
-                Text("푸는 중…")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
+            ToastWaitingView(style: waitingStyle)
         default:
             if let answer = appState.current?.answer {
                 Text(answer)

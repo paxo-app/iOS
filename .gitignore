@@ -39,3 +39,6 @@ docs/private
 # AI 도구 로컬 설정 (팀 공유는 .claude/settings.json)
 .claude/settings.local.json
 CLAUDE.local.md
+
+# scripts/measure-latency.sh 결과 (원자료는 PR에 요약만)
+latency-*.csv
