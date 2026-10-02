@@ -63,15 +63,15 @@ struct OnboardingView: View {
                 .font(.title2.bold())
             VStack(alignment: .leading, spacing: 10) {
                 featureRow(
-                    icon: "camera.viewfinder",
+                    icon: Image(systemName: "camera.viewfinder"),
                     title: "단축키 한 번으로 캡처",
                     detail: "\(appState.hotkey.display) 를 누르면 화면 속 문제를 바로 캡처해요.")
                 featureRow(
-                    icon: "text.book.closed",
+                    icon: Image(systemName: "text.book.closed"),
                     title: "정답과 해설을 함께",
                     detail: "AI가 정답과 함께 왜 그런지 풀이 과정을 설명해요.")
                 featureRow(
-                    icon: "checkmark.circle",
+                    icon: Image(systemName: "checkmark.circle"),
                     title: "빠른 채점 모드",
                     detail: "문제집 셀프 채점엔 정답 먼저, 해설은 필요할 때만.")
             }
@@ -79,10 +79,12 @@ struct OnboardingView: View {
         }
     }
 
-    private func featureRow(icon: String, title: String, detail: String) -> some View {
+    private func featureRow(icon: Image, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon)
-                .font(.title3)
+            icon
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
                 .foregroundStyle(.tint)
                 .frame(width: 26)
             VStack(alignment: .leading, spacing: 2) {
@@ -143,15 +145,15 @@ struct OnboardingView: View {
                 .font(.title2.bold())
             VStack(alignment: .leading, spacing: 10) {
                 featureRow(
-                    icon: "text.viewfinder",
+                    icon: Image("PaxoMenuBar").renderingMode(.template),
                     title: "Dock에는 보이지 않아요",
                     detail: "Paxo는 화면 위 메뉴바에 상주하는 앱이에요.")
                 featureRow(
-                    icon: "keyboard",
+                    icon: Image(systemName: "keyboard"),
                     title: "언제든 \(appState.hotkey.display)",
                     detail: "어떤 앱을 쓰고 있어도 단축키로 바로 풀이를 시작해요. 단축키는 설정에서 바꿀 수 있어요.")
                 featureRow(
-                    icon: "gearshape",
+                    icon: Image(systemName: "gearshape"),
                     title: "설정에서 맞춤 조정",
                     detail: "캡처 방식(영역/전체 화면), 빠른 채점 모드, 과목 프리셋을 바꿀 수 있어요.")
             }
