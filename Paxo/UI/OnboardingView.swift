@@ -56,8 +56,7 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         VStack(spacing: 14) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
+            PaxoAppIcon()
                 .frame(width: 84, height: 84)
             Text("Paxo에 오신 것을 환영해요")
                 .font(.title2.bold())
