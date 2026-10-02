@@ -8,7 +8,10 @@ struct MenuContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Image(systemName: "text.viewfinder")
+                Image("PaxoLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
                 Text("Paxo").font(.headline)
                 Spacer()
             }

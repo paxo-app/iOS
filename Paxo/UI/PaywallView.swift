@@ -6,9 +6,10 @@ struct PaywallView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "text.viewfinder")
-                .font(.system(size: 40))
-                .foregroundStyle(.tint)
+            Image("PaxoLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 64, height: 64)
 
             Text("Paxo Pro")
                 .font(.title2.bold())
