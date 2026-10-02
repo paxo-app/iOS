@@ -6,9 +6,7 @@ struct PaywallView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Image("PaxoLogo")
-                .resizable()
-                .scaledToFit()
+            PaxoAppIcon()
                 .frame(width: 64, height: 64)
 
             Text("Paxo Pro")
