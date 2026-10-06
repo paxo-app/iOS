@@ -59,6 +59,21 @@ jobs:
           fi
           echo "✓ 알려진 시크릿 형식 없음"
 
+  ai-review:
+    name: AI 리뷰 엔진 테스트
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: 리뷰 상태·보안 경계 테스트
+        run: node --test .github/ai-review/*.test.mjs
+
   proxy:
     name: 프록시 테스트
     runs-on: ubuntu-latest
