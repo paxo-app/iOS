@@ -13,22 +13,32 @@ struct PaywallView: View {
                 .font(.title2.bold())
 
             if store.isPro {
-                Label("Pro 사용 중 — 무제한으로 풀이와 해설을 볼 수 있어요.", systemImage: "checkmark.seal.fill")
-                    .font(.callout)
-                    .multilineTextAlignment(.center)
+                Label(
+                    "Pro 사용 중 — 하루 최대 \(UsagePolicy.dailyProLimit)회 풀이할 수 있어요.",
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(.callout)
+                .multilineTextAlignment(.center)
             } else {
-                Text("무료 풀이는 하루 \(UsageTracker.dailyFreeLimit)회예요.\nPro로 업그레이드하면 풀이와 해설을 무제한으로 볼 수 있어요.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                Text(
+                    "무료 풀이는 하루 \(UsagePolicy.dailyFreeLimit)회예요.\nPro는 비용 보호를 위해 하루 최대 \(UsagePolicy.dailyProLimit)회 제공돼요."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
-                if store.products.isEmpty {
+                if store.productLoadState == .idle || store.productLoadState == .loading {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("가격 정보를 불러오는 중…")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
+                } else if store.products.isEmpty {
+                    Button("가격 정보 다시 불러오기") {
+                        Task { await store.loadProducts() }
+                    }
+                    .buttonStyle(.bordered)
                 } else {
                     VStack(spacing: 8) {
                         ForEach(store.products, id: \.id) { product in
@@ -41,8 +51,8 @@ struct PaywallView: View {
                                     Text("\(product.displayPrice) \(periodLabel(product))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
-                                    if hasFreeTrial(product) {
-                                        Text("7일 무료 체험 포함")
+                                    if let freeTrialText = freeTrialText(product) {
+                                        Text(freeTrialText)
                                             .font(.caption2)
                                             .foregroundStyle(.tint)
                                     }
@@ -54,6 +64,13 @@ struct PaywallView: View {
                         }
                     }
                     .disabled(store.purchaseInFlight)
+
+                    if showsIntroOfferNotice {
+                        Text("무료 체험은 신규 구독자에게 같은 구독 그룹에서 한 번만 제공됩니다.")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
 
@@ -101,7 +118,26 @@ struct PaywallView: View {
         }
     }
 
-    private func hasFreeTrial(_ product: Product) -> Bool {
-        product.subscription?.introductoryOffer?.paymentMode == .freeTrial
+    private var showsIntroOfferNotice: Bool {
+        store.products.contains { store.isEligibleForIntroOffer($0) }
+    }
+
+    private func freeTrialText(_ product: Product) -> String? {
+        guard store.isEligibleForIntroOffer(product),
+            let offer = product.subscription?.introductoryOffer,
+            offer.paymentMode == .freeTrial,
+            let unit = periodUnitLabel(offer.period.unit)
+        else { return nil }
+        return "\(offer.period.value)\(unit) 무료 체험 포함"
+    }
+
+    private func periodUnitLabel(_ unit: Product.SubscriptionPeriod.Unit) -> String? {
+        switch unit {
+        case .day: return "일"
+        case .week: return "주"
+        case .month: return "개월"
+        case .year: return "년"
+        @unknown default: return nil
+        }
     }
 }
