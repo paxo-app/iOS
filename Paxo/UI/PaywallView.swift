@@ -28,13 +28,18 @@ struct PaywallView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-                if store.products.isEmpty {
+                if store.productLoadState == .idle || store.productLoadState == .loading {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("가격 정보를 불러오는 중…")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
+                } else if store.products.isEmpty {
+                    Button("가격 정보 다시 불러오기") {
+                        Task { await store.loadProducts() }
+                    }
+                    .buttonStyle(.bordered)
                 } else {
                     VStack(spacing: 8) {
                         ForEach(store.products, id: \.id) { product in

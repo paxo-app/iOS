@@ -264,13 +264,14 @@ final class AppState: ObservableObject {
 
     func showPaywall() {
         paywallWindow.show(store: store)
+        Task { await store.reloadProductsIfNeeded() }
     }
 
     /// 메뉴가 열릴 때 서버 정본을 새로 읽어 자정 초기화와 구독 변경을 반영한다.
     func refreshFreeRemaining() {
         Task {
             guard case .signedIn = authenticationPhase else { return }
-            if let session = try? await sessionManager.session() {
+            if let session = try? await sessionManager.session(forceRefresh: true) {
                 apply(session)
             }
         }
@@ -426,7 +427,7 @@ final class AppState: ObservableObject {
         }
         phase = .checkingAccess
         do {
-            let session = try await sessionManager.session()
+            let session = try await sessionManager.session(forceRefresh: true)
             apply(session)
             guard session.remainingToday > 0 else {
                 phase = .idle

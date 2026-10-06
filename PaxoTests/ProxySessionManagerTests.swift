@@ -68,6 +68,23 @@ struct ProxySessionManagerTests {
         #expect(credentials.value == "refresh-token")
     }
 
+    @Test("강제 갱신은 캐시 대신 서버의 최신 사용량을 읽는다")
+    func forceRefreshesCachedUsage() async throws {
+        let trackingLoader = SequencedSessionLoader()
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil),
+            credentialStore: StubCredentialStore(value: "old-refresh-token"),
+            loader: trackingLoader
+        )
+
+        let cached = try await manager.session()
+        let refreshed = try await manager.session(forceRefresh: true)
+
+        #expect(cached.remainingToday == 2)
+        #expect(refreshed.remainingToday == 1)
+        #expect(trackingLoader.callCount == 2)
+    }
+
     @Test("갱신 토큰이 없으면 네트워크 요청 전에 로그인을 요구한다")
     func requiresSignInBeforeNetworkRequest() async {
         let loader = StubLoader { request in
@@ -159,7 +176,22 @@ private final class StubLoader: HTTPDataLoading {
     }
 }
 
-private func sessionResponse(request: URLRequest) throws -> (Data, URLResponse) {
+private final class SequencedSessionLoader: HTTPDataLoading {
+    private(set) var callCount = 0
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        callCount += 1
+        return try sessionResponse(
+            request: request,
+            remainingToday: callCount == 1 ? 2 : 1
+        )
+    }
+}
+
+private func sessionResponse(
+    request: URLRequest,
+    remainingToday: Int = 2
+) throws -> (Data, URLResponse) {
     try response(
         request: request,
         status: 200,
@@ -167,7 +199,7 @@ private func sessionResponse(request: URLRequest) throws -> (Data, URLResponse) 
             {
               "expiresAt":"2030-01-01T00:00:00.000Z",
               "refreshToken":"refresh-token",
-              "remainingToday":2,
+              "remainingToday":\(remainingToday),
               "resetAt":"2030-01-01T15:00:00.000Z",
               "sessionToken":"opaque-token",
               "tier":"free"

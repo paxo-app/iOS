@@ -9,20 +9,37 @@ enum StoreProducts {
     ]
 }
 
+enum ProductLoadState: Equatable {
+    case idle
+    case loading
+    case loaded
+    case unavailable
+}
+
 /// StoreKit 2 구독 관리.
 /// - 로컬 테스트: Config/Paxo.storekit (스킴 → Run → Options → StoreKit Configuration에서 선택)
 /// - 출시 전: App Store Connect에 동일한 product ID로 구독 상품 생성 필요
 @MainActor
 final class StoreManager: ObservableObject {
     @Published private(set) var eligibleIntroOfferProductIDs: Set<String> = []
+    @Published private(set) var productLoadState: ProductLoadState = .idle
     @Published private(set) var products: [Product] = []
     @Published private(set) var isPro = false
     @Published private(set) var purchaseInFlight = false
     @Published var errorMessage: String?
 
     var onEntitlementsChanged: (() async -> Void)?
+    private let productLoader: () async throws -> [Product]
     private var updatesTask: Task<Void, Never>?
     private var hasLoadedEntitlements = false
+
+    init(
+        productLoader: @escaping () async throws -> [Product] = {
+            try await Product.products(for: StoreProducts.identifiers)
+        }
+    ) {
+        self.productLoader = productLoader
+    }
 
     func start() {
         // 앱 실행 중 들어오는 트랜잭션(갱신, 환불, 다른 기기 구매 등) 반영
@@ -41,15 +58,30 @@ final class StoreManager: ObservableObject {
     }
 
     func loadProducts() async {
+        guard productLoadState != .loading else { return }
+        productLoadState = .loading
+        errorMessage = nil
         do {
-            products = try await Product.products(for: StoreProducts.identifiers)
-                .sorted { $0.price < $1.price }
+            products = try await productLoader().sorted { $0.price < $1.price }
+            guard !products.isEmpty else {
+                eligibleIntroOfferProductIDs = []
+                productLoadState = .unavailable
+                errorMessage = "App Store에서 가격 정보를 받지 못했습니다. 잠시 후 다시 시도해주세요."
+                return
+            }
+            productLoadState = .loaded
             await refreshIntroOfferEligibility()
         } catch {
             eligibleIntroOfferProductIDs = []
             products = []
+            productLoadState = .unavailable
             errorMessage = "가격 정보를 불러오지 못했습니다: \(error.localizedDescription)"
         }
+    }
+
+    func reloadProductsIfNeeded() async {
+        guard products.isEmpty else { return }
+        await loadProducts()
     }
 
     func isEligibleForIntroOffer(_ product: Product) -> Bool {
