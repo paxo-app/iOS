@@ -19,15 +19,18 @@ async function resolveTier({ appleStore, config, proof, store, subject, now }) {
   ) {
     throw new HttpError(400, "invalid_storekit_proof", "invalid StoreKit proof");
   }
-  const transactionId =
+  const transactionReference =
     proof.type === "appTransaction"
       ? await appleStore.verifyAppTransaction(proof.jws)
       : await appleStore.verifyTransaction(proof.jws);
-  const transactionHash = hashSubject(`transaction:${transactionId}`, config.identityHashSecret);
+  const transactionHash = hashSubject(
+    `transaction:${transactionReference.environment}:${transactionReference.transactionId}`,
+    config.identityHashSecret
+  );
   if (!(await store.bindAppTransaction(transactionHash, subject))) {
     throw new HttpError(409, "storekit_account_mismatch", "App Store account is already linked");
   }
-  return appleStore.resolveTier(transactionId, now.getTime());
+  return appleStore.resolveTier(transactionReference, now.getTime());
 }
 
 async function issueSession({ clock, store, subject, tier, tokenFactory = newOpaqueToken }) {

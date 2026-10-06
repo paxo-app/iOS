@@ -53,6 +53,10 @@
 | 구독 상태 | 앱 UI는 StoreKit 2, 실제 AI 권한은 App Store Server API 검증 결과 |
 | Gemini API 키 | Gemini API 키,프록시 서버의 환경 변수로 관리. 클라이언트 앱에는 절대 포함하지 않는다. |
 
+Preview 프록시는 Sandbox 거래만 검증한다. Production 프록시는 실제 판매 거래를 Production에서
+우선 검증하고 TestFlight와 App Review의 Sandbox 거래는 독립된 Sandbox 검증기와 API 클라이언트로
+처리한다. 거래 식별자 해시에는 검증 환경을 포함해 두 환경의 ID 공간을 분리한다.
+
 
 ## 배포 파이프라인
 

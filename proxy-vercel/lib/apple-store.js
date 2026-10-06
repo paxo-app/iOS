@@ -8,6 +8,8 @@ import {
   Environment,
   SignedDataVerifier,
   Status,
+  VerificationException,
+  VerificationStatus,
 } from "@apple/app-store-server-library";
 
 import { HttpError } from "./errors.js";
@@ -26,48 +28,80 @@ function loadRootCertificates() {
 }
 
 class AppleStore {
-  constructor(verifier, client, environment, bundleId, appAppleId) {
-    this.verifier = verifier;
-    this.client = client;
-    this.environment = environment;
+  constructor(contexts, bundleId) {
+    this.contexts = contexts;
     this.bundleId = bundleId;
-    this.appAppleId = appAppleId;
   }
 
   async verifyAppTransaction(jws) {
-    try {
-      const transaction = await this.verifier.verifyAndDecodeAppTransaction(jws);
-      if (!transaction.appTransactionId) throw new Error("missing app transaction id");
-      if (transaction.bundleId !== this.bundleId) throw new Error("bundle mismatch");
-      if (this.appAppleId && transaction.appAppleId !== this.appAppleId) {
-        throw new Error("app id mismatch");
+    for (const context of this.contexts) {
+      let transaction;
+      try {
+        transaction = await context.verifier.verifyAndDecodeAppTransaction(jws);
+      } catch (error) {
+        if (isRetryableVerification(error)) {
+          throw new HttpError(503, "app_store_unavailable", "App Store verification unavailable");
+        }
+        continue;
       }
-      return transaction.appTransactionId;
-    } catch (error) {
-      throw new HttpError(401, "invalid_storekit_proof", "App Store verification failed");
+
+      try {
+        if (!transaction.appTransactionId) throw new Error("missing app transaction id");
+        if (transaction.bundleId !== this.bundleId) throw new Error("bundle mismatch");
+        if (context.appAppleId && transaction.appAppleId !== context.appAppleId) {
+          throw new Error("app id mismatch");
+        }
+        return {
+          environment: context.environment,
+          transactionId: transaction.appTransactionId,
+        };
+      } catch {
+        throw new HttpError(401, "invalid_storekit_proof", "App Store verification failed");
+      }
     }
+
+    throw new HttpError(401, "invalid_storekit_proof", "App Store verification failed");
   }
 
   async verifyTransaction(jws) {
-    try {
-      const transaction = await this.verifier.verifyAndDecodeTransaction(jws);
+    for (const context of this.contexts) {
+      let transaction;
+      try {
+        transaction = await context.verifier.verifyAndDecodeTransaction(jws);
+      } catch (error) {
+        if (isRetryableVerification(error)) {
+          throw new HttpError(503, "app_store_unavailable", "App Store verification unavailable");
+        }
+        continue;
+      }
+
       if (
         !transaction.originalTransactionId ||
         !PRODUCT_IDS.has(transaction.productId) ||
         transaction.bundleId !== this.bundleId
       ) {
-        throw new Error("transaction mismatch");
+        throw new HttpError(401, "invalid_storekit_proof", "App Store verification failed");
       }
-      return transaction.originalTransactionId;
-    } catch {
-      throw new HttpError(401, "invalid_storekit_proof", "App Store verification failed");
+      return {
+        environment: context.environment,
+        transactionId: transaction.originalTransactionId,
+      };
     }
+
+    throw new HttpError(401, "invalid_storekit_proof", "App Store verification failed");
   }
 
-  async resolveTier(appTransactionId, now = Date.now()) {
+  async resolveTier(reference, now = Date.now()) {
+    const context = this.contexts.find(
+      (candidate) => candidate.environment === reference.environment
+    );
+    if (!context || typeof reference.transactionId !== "string" || !reference.transactionId) {
+      throw new HttpError(503, "app_store_unavailable", "App Store verification unavailable");
+    }
+
     let response;
     try {
-      response = await this.client.getAllSubscriptionStatuses(appTransactionId, [
+      response = await context.client.getAllSubscriptionStatuses(reference.transactionId, [
         Status.ACTIVE,
         Status.BILLING_GRACE_PERIOD,
       ]);
@@ -82,24 +116,42 @@ class AppleStore {
       throw new HttpError(503, "app_store_unavailable", "App Store verification unavailable");
     }
 
-    if (response.bundleId !== this.bundleId || response.environment !== this.environment) {
+    if (response.bundleId !== this.bundleId || response.environment !== context.environment) {
       throw new HttpError(503, "app_store_invalid_response", "App Store verification unavailable");
     }
-    if (this.appAppleId && response.appAppleId !== this.appAppleId) {
+    if (context.appAppleId && response.appAppleId !== context.appAppleId) {
       throw new HttpError(503, "app_store_invalid_response", "App Store verification unavailable");
     }
 
     for (const group of response.data || []) {
       for (const item of group.lastTransactions || []) {
         if (!item.signedTransactionInfo) continue;
-        const transaction = await this.verifier.verifyAndDecodeTransaction(item.signedTransactionInfo);
+        let transaction;
+        try {
+          transaction = await context.verifier.verifyAndDecodeTransaction(item.signedTransactionInfo);
+        } catch {
+          throw new HttpError(
+            503,
+            "app_store_invalid_response",
+            "App Store verification unavailable"
+          );
+        }
         if (!PRODUCT_IDS.has(transaction.productId) || transaction.revocationDate) continue;
 
         if (item.status === Status.ACTIVE && Number(transaction.expiresDate || 0) > now) {
           return "pro";
         }
         if (item.status === Status.BILLING_GRACE_PERIOD && item.signedRenewalInfo) {
-          const renewal = await this.verifier.verifyAndDecodeRenewalInfo(item.signedRenewalInfo);
+          let renewal;
+          try {
+            renewal = await context.verifier.verifyAndDecodeRenewalInfo(item.signedRenewalInfo);
+          } catch {
+            throw new HttpError(
+              503,
+              "app_store_invalid_response",
+              "App Store verification unavailable"
+            );
+          }
           if (Number(renewal.gracePeriodExpiresDate || 0) > now) return "pro";
         }
       }
@@ -108,25 +160,41 @@ class AppleStore {
   }
 }
 
+function isRetryableVerification(error) {
+  return (
+    error instanceof VerificationException &&
+    error.status === VerificationStatus.RETRYABLE_VERIFICATION_FAILURE
+  );
+}
+
 function createAppleStore(config) {
-  const environment =
-    config.appStoreEnvironment === "PRODUCTION" ? Environment.PRODUCTION : Environment.SANDBOX;
+  const environments =
+    config.appStoreEnvironment === "PRODUCTION"
+      ? [Environment.PRODUCTION, Environment.SANDBOX]
+      : [Environment.SANDBOX];
   const roots = loadRootCertificates();
-  const verifier = new SignedDataVerifier(
-    roots,
-    true,
-    environment,
-    config.appBundleId,
-    config.appAppleId
-  );
-  const client = new AppStoreServerAPIClient(
-    config.appStorePrivateKey,
-    config.appStoreKeyId,
-    config.appStoreIssuerId,
-    config.appBundleId,
-    environment
-  );
-  return new AppleStore(verifier, client, environment, config.appBundleId, config.appAppleId);
+  const contexts = environments.map((environment) => {
+    const appAppleId = environment === Environment.PRODUCTION ? config.appAppleId : undefined;
+    return {
+      appAppleId,
+      client: new AppStoreServerAPIClient(
+        config.appStorePrivateKey,
+        config.appStoreKeyId,
+        config.appStoreIssuerId,
+        config.appBundleId,
+        environment
+      ),
+      environment,
+      verifier: new SignedDataVerifier(
+        roots,
+        true,
+        environment,
+        config.appBundleId,
+        appAppleId
+      ),
+    };
+  });
+  return new AppleStore(contexts, config.appBundleId);
 }
 
 export { AppleStore, PRODUCT_IDS, createAppleStore };

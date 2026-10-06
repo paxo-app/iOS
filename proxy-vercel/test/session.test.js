@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createChallengeHandler } from "../api/session-challenge.js";
 import { createSessionHandler, parseSessionBody } from "../api/session.js";
+import { resolveTier } from "../lib/session-service.js";
 import { hashSubject, hashToken, sha256 } from "../lib/security.js";
 import { MemoryStore, appRequest, baseConfig, createResponse } from "./helpers.js";
 
@@ -32,7 +33,10 @@ test("일회용 nonce와 Apple 로그인 증명으로 15분 세션을 발급한�
     }),
     appleStoreFactory: () => ({
       resolveTier: async () => "pro",
-      verifyAppTransaction: async () => "app-transaction-id",
+      verifyAppTransaction: async () => ({
+        environment: "Production",
+        transactionId: "app-transaction-id",
+      }),
     }),
     clock: () => NOW,
     configLoader: () => baseConfig(),
@@ -52,6 +56,12 @@ test("일회용 nonce와 Apple 로그인 증명으로 15분 세션을 발급한�
   assert.equal(store.refreshes.has(hashToken(body.refreshToken)), true);
   const subject = hashSubject("apple:apple-user-id", "identity-secret");
   assert.equal(store.accounts.has(subject), true);
+  assert.equal(
+    store.appTransactions.has(
+      hashSubject("transaction:Production:app-transaction-id", "identity-secret")
+    ),
+    true
+  );
   assert.equal(JSON.stringify([...store.accounts.values()]).includes("apple-refresh-token"), false);
 });
 
@@ -71,7 +81,7 @@ test("무료 로그인은 AppTransaction이 없어도 성공한다", async () =>
       },
       verifyAppTransaction: async () => {
         storeKitCalls += 1;
-        return "id";
+        return { environment: "Production", transactionId: "id" };
       },
     }),
     clock: () => NOW,
@@ -88,6 +98,42 @@ test("무료 로그인은 AppTransaction이 없어도 성공한다", async () =>
   assert.equal(storeKitCalls, 0);
 });
 
+test("동일 거래 ID도 Production과 Sandbox는 별도 계정 바인딩을 사용한다", async () => {
+  const store = new MemoryStore();
+  const config = baseConfig();
+
+  for (const [environment, subject] of [
+    ["Production", "production-subject"],
+    ["Sandbox", "sandbox-subject"],
+  ]) {
+    await resolveTier({
+      appleStore: {
+        resolveTier: async () => "free",
+        verifyAppTransaction: async () => ({ environment, transactionId: "shared-id" }),
+      },
+      config,
+      now: NOW,
+      proof: { jws: "one.two.three", type: "appTransaction" },
+      store,
+      subject,
+    });
+  }
+
+  assert.equal(store.appTransactions.size, 2);
+  assert.equal(
+    store.appTransactions.get(
+      hashSubject("transaction:Production:shared-id", config.identityHashSecret)
+    ),
+    "production-subject"
+  );
+  assert.equal(
+    store.appTransactions.get(
+      hashSubject("transaction:Sandbox:shared-id", config.identityHashSecret)
+    ),
+    "sandbox-subject"
+  );
+});
+
 test("nonce는 한 번만 사용할 수 있다", async () => {
   const store = new MemoryStore();
   await store.putChallenge(sha256(NONCE));
@@ -96,7 +142,10 @@ test("nonce는 한 번만 사용할 수 있다", async () => {
       exchangeAuthorizationCode: async () => "apple-refresh-token",
       verifyIdentityToken: async () => "apple-user-id",
     }),
-    appleStoreFactory: () => ({ resolveTier: async () => "free", verifyAppTransaction: async () => "id" }),
+    appleStoreFactory: () => ({
+      resolveTier: async () => "free",
+      verifyAppTransaction: async () => ({ environment: "Production", transactionId: "id" }),
+    }),
     configLoader: () => baseConfig(),
     storeFactory: () => store,
   });

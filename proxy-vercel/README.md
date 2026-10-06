@@ -22,6 +22,11 @@ Apple 사용자 식별자는 HMAC 처리하며 Apple 갱신 토큰은 AES-256-GC
 - Preview: `APP_STORE_ENVIRONMENT=SANDBOX`, `REDIS_KEY_PREFIX=paxo:preview`
 - 로컬: `APP_STORE_ENVIRONMENT=SANDBOX`, `REDIS_KEY_PREFIX=paxo:dev`
 
+Preview는 Apple 서명이 검증된 Sandbox 거래만 허용한다. Production은 실제 판매 거래를 우선
+Production에서 검증하고, TestFlight와 App Review가 사용하는 Apple 서명 Sandbox 거래만 별도
+Sandbox 검증기로 허용한다. 두 환경은 App Store Server API 클라이언트와 거래 바인딩 키를 분리하며,
+등록된 번들 ID와 월간·연간 상품 ID가 일치하지 않으면 모두 거절한다.
+
 `APP_STORE_*`는 App Store Connect In-App Purchase API 키이고, `APPLE_SIGN_IN_*`는 Apple
 Developer에서 만든 Sign in with Apple 키다. 두 개인 키는 서로 바꿔 쓰지 않는다.
 
