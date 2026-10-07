@@ -160,6 +160,25 @@ struct SettingsView: View {
                     appState.showOnboarding()
                 }
             }
+
+            Section("지원 및 공유") {
+                if let feedbackURL {
+                    Link(destination: feedbackURL) {
+                        Label("의견보내기", systemImage: "envelope")
+                    }
+                }
+
+                if let appStoreURL = DefaultConfig.appStoreURL {
+                    ShareLink(item: appStoreURL) {
+                        Label("앱 공유", systemImage: "square.and.arrow.up")
+                    }
+                } else {
+                    Button(action: {}) {
+                        Label("앱 공유", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(true)
+                }
+            }
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 660)
@@ -174,4 +193,12 @@ struct SettingsView: View {
     }
 
     @State private var showsDeleteConfirmation = false
+
+    private var feedbackURL: URL? {
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = "paxo.app.official@gmail.com"
+        components.queryItems = [URLQueryItem(name: "subject", value: "Paxo 의견 보내기")]
+        return components.url
+    }
 }
