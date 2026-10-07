@@ -62,7 +62,17 @@ function repoPath() {
 
 async function request(url, options = {}, timeoutMs = 20_000) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
-  if (!response.ok) throw new Error(`외부 API 요청 실패 (${response.status})`);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const apiError = payload?.error;
+    const status = typeof apiError?.status === "string" ? ` ${apiError.status}` : "";
+    let message = typeof apiError?.message === "string" ? apiError.message : "";
+    for (const secret of [process.env.GEMINI_API_KEY, process.env.GITHUB_TOKEN]) {
+      if (secret) message = message.replaceAll(secret, "[redacted]");
+    }
+    const detail = message.trim().replace(/\s+/g, " ").slice(0, 400);
+    throw new Error(`외부 API 요청 실패 (${response.status}${status})${detail ? `: ${detail}` : ""}`);
+  }
   try {
     return await response.json();
   } catch {
