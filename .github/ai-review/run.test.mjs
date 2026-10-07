@@ -68,6 +68,39 @@ test("PR 이벤트에서 Gemini 응답을 검증하고 요약 댓글 하나를 �
   assert.equal(state.headSha, headSha);
 });
 
+test("외부 API 오류 내용을 제한적으로 표시하고 토큰을 숨긴다", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.GEMINI_API_KEY;
+  const originalModel = process.env.GEMINI_MODEL;
+  const { api } = mockApi([
+    { filename, status: "modified", patch: "@@ -0,0 +1 @@\n+let value = 1" },
+  ]);
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({ error: { status: "INVALID_ARGUMENT", message: "API key test-key not valid" } }),
+  });
+  process.env.GEMINI_API_KEY = "test-key";
+  process.env.GEMINI_MODEL = "gemini-3.6-flash";
+  try {
+    await assert.rejects(
+      review(event, api),
+      (error) => {
+        assert.match(error.message, /400 INVALID_ARGUMENT/);
+        assert.match(error.message, /API key \[redacted\] not valid/);
+        assert.doesNotMatch(error.message, /test-key/);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalKey;
+    if (originalModel === undefined) delete process.env.GEMINI_MODEL;
+    else process.env.GEMINI_MODEL = originalModel;
+  }
+});
+
 test("PR 전체에 민감 파일이 있으면 Gemini를 호출하지 않는다", async () => {
   const originalFetch = globalThis.fetch;
   const { api, calls } = mockApi([
