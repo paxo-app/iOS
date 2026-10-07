@@ -159,7 +159,7 @@ async function callGemini(input) {
     generationConfig: {
       temperature: 0.2,
       maxOutputTokens: 4096,
-      responseFormat: { text: { mimeType: "application/json", schema: REVIEW_SCHEMA } },
+      responseFormat: { text: { mimeType: "APPLICATION_JSON", schema: REVIEW_SCHEMA } },
     },
   };
   const response = await request(endpoint, {

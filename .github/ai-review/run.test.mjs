@@ -35,8 +35,10 @@ test("PR 이벤트에서 Gemini 응답을 검증하고 요약 댓글 하나를 �
     { filename, status: "modified", patch: "@@ -0,0 +1 @@\n+let value = 1" },
   ]);
   let modelCalls = 0;
-  globalThis.fetch = async () => {
+  let generationConfig;
+  globalThis.fetch = async (_url, options) => {
     modelCalls += 1;
+    generationConfig = JSON.parse(options.body).generationConfig;
     return {
       ok: true,
       json: async () => ({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: JSON.stringify({
@@ -60,6 +62,7 @@ test("PR 이벤트에서 Gemini 응답을 검증하고 요약 댓글 하나를 �
     else process.env.GEMINI_API_KEY = originalKey;
   }
   assert.equal(modelCalls, 1);
+  assert.equal(generationConfig.responseFormat.text.mimeType, "APPLICATION_JSON");
   const posted = calls.filter((call) => call.method === "POST");
   assert.equal(posted.length, 1);
   const state = parseState(posted[0].body.body);
