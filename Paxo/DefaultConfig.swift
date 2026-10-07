@@ -17,6 +17,9 @@ enum DefaultConfig {
     /// 이용약관 — Apple 표준 EULA
     static let termsOfUseURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
 
+    /// 출시 후 App Store 앱 페이지 URL을 설정한다.
+    static let appStoreURL: URL? = nil
+
     /// 바이너리에서 추출 가능한 앱 버전 필터이며 실제 권한은 Apple 로그인 세션으로 검증한다.
     static let appToken: String = Secrets.appToken
 }
