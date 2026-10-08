@@ -1,0 +1,17 @@
+{
+  "name": "paxo-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "for file in api/*.js lib/*.js; do node --check \"$file\" || exit 1; done"
+  },
+  "dependencies": {
+    "@apple/app-store-server-library": "3.1.0",
+    "@upstash/redis": "1.39.0"
+  }
+}

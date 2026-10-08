@@ -10,7 +10,12 @@ struct PaxoApp: App {
                 .environmentObject(AppState.shared)
                 .environmentObject(AppState.shared.store)
         } label: {
-            Image(systemName: "text.viewfinder")
+            Image("PaxoMenuBar")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 12, height: 12)
+                .accessibilityLabel("Paxo")
         }
         .menuBarExtraStyle(.window)
 

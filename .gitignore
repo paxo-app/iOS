@@ -40,5 +40,11 @@ docs/private
 .claude/settings.local.json
 CLAUDE.local.md
 
+# 개인 개발 서명 설정 및 키 내보내기 파일
+Config/LocalSigning.xcconfig
+Config/*.p12
+Config/*.pfx
+Config/*.privatekey
+
 # scripts/measure-latency.sh 결과 (원자료는 PR에 요약만)
 latency-*.csv

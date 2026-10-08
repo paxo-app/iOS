@@ -31,13 +31,18 @@
           "introductoryOffer" : {
             "internalID" : "A1B2C3D4E5F60011",
             "paymentMode" : "free",
-            "subscriptionPeriod" : "P1W"
+            "subscriptionPeriod" : "P3D"
           },
           "localizations" : [
             {
-              "description" : "풀이와 해설 무제한",
-              "displayName" : "Paxo Pro 월간",
+              "description" : "Up to 100 AI solutions and explanations per day",
+              "displayName" : "Paxo Pro Monthly",
               "locale" : "en_US"
+            },
+            {
+              "description" : "하루 최대 100회 AI 풀이 및 해설",
+              "displayName" : "Paxo Pro 월간",
+              "locale" : "ko_KR"
             }
           ],
           "productID" : "com.hyeseong.Paxo.pro.monthly",
@@ -60,13 +65,18 @@
           "introductoryOffer" : {
             "internalID" : "A1B2C3D4E5F60012",
             "paymentMode" : "free",
-            "subscriptionPeriod" : "P1W"
+            "subscriptionPeriod" : "P3D"
           },
           "localizations" : [
             {
-              "description" : "풀이와 해설 무제한 (연간, 약 33% 할인)",
-              "displayName" : "Paxo Pro 연간",
+              "description" : "Up to 100 AI solutions and explanations per day",
+              "displayName" : "Paxo Pro Yearly",
               "locale" : "en_US"
+            },
+            {
+              "description" : "하루 최대 100회 AI 풀이 및 해설",
+              "displayName" : "Paxo Pro 연간",
+              "locale" : "ko_KR"
             }
           ],
           "productID" : "com.hyeseong.Paxo.pro.yearly",

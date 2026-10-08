@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// 토스트를 하나의 패널로 재사용해 결과 갱신 중 중복 알림을 막는다.
 @MainActor
 final class ToastController {
     private var panel: NSPanel?
@@ -92,17 +93,13 @@ private struct ToastView: View {
         content
             .padding(.horizontal, 22)
             .padding(.vertical, 14)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
-            )
+            .paxoSurface(cornerRadius: 16)
     }
 
     @ViewBuilder
     private var content: some View {
         switch appState.phase {
-        case .capturing, .solvingAnswer:
+        case .checkingAccess, .capturing, .solvingAnswer:
             ToastWaitingView(style: waitingStyle)
         default:
             if let answer = appState.current?.answer {
