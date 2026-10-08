@@ -39,3 +39,9 @@ docs/private
 # AI 도구 로컬 설정 (팀 공유는 .claude/settings.json)
 .claude/settings.local.json
 CLAUDE.local.md
+
+# 개인 개발 서명 설정 및 키 내보내기 파일
+Config/LocalSigning.xcconfig
+Config/*.p12
+Config/*.pfx
+Config/*.privatekey

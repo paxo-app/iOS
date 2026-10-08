@@ -45,6 +45,7 @@ struct OnboardingView: View {
         }
         .padding(28)
         .frame(width: 440, height: 440)
+        .paxoSurface(cornerRadius: 0)
         .onReceive(
             NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
         ) { _ in
@@ -102,7 +103,7 @@ struct OnboardingView: View {
                 .foregroundStyle(hasScreenPermission ? Color.green : Color.accentColor)
             Text("화면 기록 권한이 필요해요")
                 .font(.title2.bold())
-            Text("문제를 캡처하려면 macOS의 화면 기록 권한이 필요해요.\n캡처한 이미지는 풀이에만 사용되고 서버에 저장되지 않아요.")
+            Text("문제를 캡처하려면 macOS의 화면 기록 권한이 필요해요.\n캡처한 이미지는 풀이에 사용되고 서버에 저장되지 않아요. 최근 풀이의 문제 이미지는 이 Mac에 저장돼요.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

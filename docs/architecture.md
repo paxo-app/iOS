@@ -46,8 +46,8 @@
 | 데이터 | 저장 위치 및 방식 |
 | --- | --- |
 | 설정 · 단축키 | UserDefaults |
-| 최근 풀이 기록 | 앱 컨테이너 내 `history.json` (최대 100개, 이미지는 제외) |
-| 캡처 이미지 | 최근 8장만 메모리에 유지. 디스크에 저장(I/O)하지 않는다. |
+| 최근 풀이 기록 | 앱 컨테이너 내 `Paxo/history.json` (최대 100개, 날짜·정답·해설·자가 채점·이미지 파일명) |
+| 캡처 이미지 | 정답 호출에 성공한 이미지는 `Paxo/HistoryImages/<UUID>.jpg`에 저장한다. 메모리 캐시는 최대 8장이고, 보관 기록에서 빠진 이미지는 정리한다. |
 | 로그인 유지 정보 | Mac Keychain의 불투명 갱신 토큰. 서버의 Apple 토큰은 AES-256-GCM 암호화 |
 | 세션 · 사용량 · 풀이 상태 | Upstash Redis. Production/Preview 접두사 분리, TTL 적용 |
 | 구독 상태 | 앱 UI는 StoreKit 2, 실제 AI 권한은 App Store Server API 검증 결과 |

@@ -44,6 +44,20 @@ final class AppState: ObservableObject {
     @Published var quickCheckMode: Bool {
         didSet { UserDefaults.standard.set(quickCheckMode, forKey: "quickCheckMode") }
     }
+    @Published var showsRecentHistory: Bool {
+        didSet { UserDefaults.standard.set(showsRecentHistory, forKey: "showsRecentHistory") }
+    }
+    @Published var historyShowsExplanation: Bool {
+        didSet { UserDefaults.standard.set(historyShowsExplanation, forKey: "historyShowsExplanation") }
+    }
+    @Published var recentHistoryLimit: Int {
+        didSet { UserDefaults.standard.set(recentHistoryLimit, forKey: "recentHistoryLimit") }
+    }
+
+    var recentHistory: [SolveResult] {
+        Array(history.prefix(min(max(recentHistoryLimit, 1), 100)))
+    }
+
     @Published var preset: SubjectPreset {
         didSet { UserDefaults.standard.set(preset.rawValue, forKey: "preset") }
     }
@@ -134,7 +148,7 @@ final class AppState: ObservableObject {
     private let onboardingWindow = OnboardingWindowController()
     private let historyStore = HistoryStore()
     private let sessionManager = ProxySessionManager()
-    /// 세션 내 캡처 이미지 캐시 (SolveResult.id 키). 해설 재생성용. 디스크 저장 안 함.
+    /// 메모리 사용을 제한하고 오래된 문제 이미지는 필요할 때 로컬 기록에서 다시 읽는다.
     private var imageCache: [UUID: Data] = [:]
     private var imageCacheOrder: [UUID] = []
     private static let imageCacheLimit = 8
@@ -146,6 +160,9 @@ final class AppState: ObservableObject {
 
     private init() {
         quickCheckMode = UserDefaults.standard.bool(forKey: "quickCheckMode")
+        showsRecentHistory = UserDefaults.standard.object(forKey: "showsRecentHistory") as? Bool ?? true
+        historyShowsExplanation = UserDefaults.standard.object(forKey: "historyShowsExplanation") as? Bool ?? true
+        recentHistoryLimit = min(max(UserDefaults.standard.object(forKey: "recentHistoryLimit") as? Int ?? 5, 1), 100)
         preset = SubjectPreset(rawValue: UserDefaults.standard.string(forKey: "preset") ?? "") ?? .general
         captureMode = CaptureMode(rawValue: UserDefaults.standard.string(forKey: "captureMode") ?? "") ?? .region
         panelPosition =
@@ -277,14 +294,41 @@ final class AppState: ObservableObject {
         }
     }
 
-    func showFromHistory(_ item: SolveResult) {
-        // 기록 다시 보기는 항상 패널로 (해설 확인·재생성 가능).
-        // 같은 세션에 캡처 이미지가 캐시에 남아 있으면 "해설 보기"로 재생성 가능.
+    /// 패널 안의 홈에서 기록을 열 때는 현재 창을 닫지 않고 상세 화면으로 전환한다.
+    @discardableResult
+    func showFromHistory(_ item: SolveResult, presentPanel: Bool = true, dismissPanel: Bool = true) -> Bool {
+        guard !isSolving else { return false }
         toastDismissTask?.cancel()
         toast.dismiss()
+        if imageCache[item.id] == nil, let image = historyStore.loadImage(for: item), NSImage(data: image) != nil {
+            cacheImage(image, for: item.id)
+        }
         current = item
         phase = item.explanation == nil ? .answerReady : .done
-        resultPanel.show(appState: self, on: Self.screenUnderMouse())
+        if presentPanel {
+            resultPanel.show(appState: self, on: Self.screenUnderMouse())
+        } else if dismissPanel {
+            resultPanel.hide()
+        }
+        return true
+    }
+
+    var isSolving: Bool {
+        switch phase {
+        case .checkingAccess, .capturing, .solvingAnswer, .solvingExplanation: return true
+        default: return false
+        }
+    }
+
+    func historyImage(for item: SolveResult) -> NSImage? {
+        guard let data = imageCache[item.id] ?? historyStore.loadImage(for: item) else { return nil }
+        return NSImage(data: data)
+    }
+
+    func updateCorrectness(_ correctness: SolveCorrectness) {
+        guard let result = current, result.answer != nil else { return }
+        current?.correctness = result.correctness == correctness ? nil : correctness
+        upsertHistory()
     }
 
     func requestExplanation() {
@@ -471,6 +515,9 @@ final class AppState: ObservableObject {
             )
             apply(generated)
             current?.answer = generated.text
+            if let id = current?.id {
+                current?.imageFileName = historyStore.saveImage(capture.data, for: id)
+            }
             phase = .answerReady
             upsertHistory()
 
