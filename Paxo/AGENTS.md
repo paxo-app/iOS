@@ -25,11 +25,12 @@
 
 | 뷰 (View) | 주입 객체 (`@EnvironmentObject`) |
 | --- | --- |
-| `MenuContentView`, `SettingsView` | `appState` + `store` |
+| `MenuContentView` | `appState` **만 주입** |
+| `SettingsView` | `appState` + `store` |
 | `ResultView`, `ToastView`, `OnboardingView` | `appState` **만 주입** |
 | `PaywallView` | `store` **만 주입** |
 
-결과 패널의 루트(`ResultPanelContentView`)에는 홈 화면 이동을 위해 `appState`와 `store`를 함께 주입한다. 내부의 `ResultView`는 여전히 `appState`만 사용한다.
+결과 패널의 루트(`ResultPanelContentView`)와 내부 홈·결과 화면은 모두 `appState`만 사용한다. 구독 상태가 필요한 화면은 기존 표의 주입 경로를 유지한다.
 
 **위 표에 명시되지 않은 객체를 뷰에서 `@EnvironmentObject`로 선언할 경우 런타임 크래시가 발생한다.** 의존성 추가가 불가피하다면 해당 컨트롤러(`ResultPanelController`, `ToastController` 등)의 뷰 초기화/주입 로직을 함께 수정해야 한다.
 

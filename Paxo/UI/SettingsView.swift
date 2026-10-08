@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 앱 설정과 날짜별 풀이 탐색을 하나의 설정 창에서 제공한다.
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var store: StoreManager

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// 온보딩 창을 재사용해 초기 설정 중 중복 창이 생기지 않게 한다.
 @MainActor
 final class OnboardingWindowController {
     private var window: NSWindow?

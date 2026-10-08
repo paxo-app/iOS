@@ -1,10 +1,10 @@
 import AuthenticationServices
 import SwiftUI
 
+/// 캡처와 기록 확인을 메뉴 안에서 이어가도록 홈 화면을 구성한다.
 struct MenuContentView: View {
     var keepsResultPanelVisible = false
     @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var store: StoreManager
     @Environment(\.dismiss) private var dismiss
     @AppStorage("recentHistoryExpanded") private var historyExpanded = true
     @State private var showsDetail = false

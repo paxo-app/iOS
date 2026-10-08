@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// 결과와 홈을 같은 패널에서 보여주고 화면 전환에 맞게 창 크기를 관리한다.
 @MainActor
 final class ResultPanelController {
     private var panel: ResultPanel?
@@ -42,7 +43,6 @@ final class ResultPanelController {
                     }
                 )
                 .environmentObject(appState)
-                .environmentObject(appState.store)
             )
             hosting.sizingOptions = []
             newPanel.contentView = hosting

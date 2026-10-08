@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// 구독 안내 창을 재사용하고 구매 상태를 같은 저장소에서 관찰하게 한다.
 @MainActor
 final class PaywallWindowController {
     private var window: NSWindow?

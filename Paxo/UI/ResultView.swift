@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// 정답과 해설을 확인하고 같은 화면 흐름에서 기록과 홈으로 돌아갈 수 있게 한다.
 struct ResultView: View {
     @EnvironmentObject private var appState: AppState
     @State private var copiedField: String?

@@ -1,5 +1,6 @@
 import AppKit
 
+/// 과목별 풀이 안내와 프롬프트 선택을 하나의 설정값으로 유지한다.
 enum SubjectPreset: String, CaseIterable, Codable, Identifiable {
     case general
     case math
@@ -100,6 +101,7 @@ enum ResultDisplayMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// 사용자의 자가 채점을 기록하며 AI의 정답 판단과 구분한다.
 enum SolveCorrectness: String, Codable {
     case correct
     case incorrect

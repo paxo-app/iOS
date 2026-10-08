@@ -1,6 +1,7 @@
 import StoreKit
 import SwiftUI
 
+/// 구독 상태와 구매 안내를 제공해 사용자가 플랜을 선택할 수 있게 한다.
 struct PaywallView: View {
     @EnvironmentObject private var store: StoreManager
 

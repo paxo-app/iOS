@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// 토스트를 하나의 패널로 재사용해 결과 갱신 중 중복 알림을 막는다.
 @MainActor
 final class ToastController {
     private var panel: NSPanel?
