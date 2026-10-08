@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 
+/// 온보딩 창을 재사용해 초기 설정 중 중복 창이 생기지 않게 한다.
 @MainActor
 final class OnboardingWindowController {
     private var window: NSWindow?
@@ -9,12 +10,14 @@ final class OnboardingWindowController {
         if window == nil {
             let newWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 440, height: 440),
-                styleMask: [.titled, .closable, .fullSizeContentView],
+                styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
             newWindow.title = "Paxo 시작하기"
-            newWindow.titlebarAppearsTransparent = true
+            newWindow.titlebarAppearsTransparent = false
+            newWindow.isOpaque = false
+            newWindow.backgroundColor = .clear
             newWindow.isReleasedWhenClosed = false
             newWindow.contentView = NSHostingView(
                 rootView: OnboardingView(onFinish: { [weak self] in

@@ -1,168 +1,252 @@
-// 미국 리전(iad1) 고정 — Gemini "User location is not supported" 회피 (vercel.json).
+import { loadConfig, TIER_LIMITS } from "../lib/config.js";
+import { asHttpError, HttpError } from "../lib/errors.js";
+import { sendError, setUsageHeaders } from "../lib/http.js";
+import { createRedisStore } from "../lib/redis-store.js";
+import {
+  bearerToken,
+  hashToken,
+  requestId,
+  requireAppToken,
+  seoulUsageWindow,
+} from "../lib/security.js";
+
 export const config = { maxDuration: 60 };
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const MAX_TEXT_LEN = 8000; // Prompts.swift 최대 프롬프트의 ~10배 여유
-const MAX_IMAGE_B64 = 6_000_000; // 2000px JPEG q0.82 실측 상한의 약 2배
+const MAX_TEXT_LENGTH = 8_000;
+const MAX_IMAGE_BASE64_LENGTH = 4_000_000;
+const MAX_BODY_LENGTH = 4_100_000;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png"]);
-const DAILY_LIMIT = 60; // warm instance 한정 베스트에포트 (정식 한도는 향후 Upstash)
+const SOLVE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// deviceID -> { count, day } : 서버리스 warm instance 메모리. 콜드 스타트 시 초기화됨.
-const memUsage = new Map();
+function createGenerateHandler(dependencies = {}) {
+  const configLoader = dependencies.configLoader || loadConfig;
+  const storeFactory = dependencies.storeFactory || createRedisStore;
+  const fetcher = dependencies.fetcher || fetch;
+  const clock = dependencies.clock || (() => new Date());
 
-export default async function handler(req, res) {
-  const started = Date.now();
-  try {
-    if (req.method !== "POST") return fail(res, 405, "method not allowed");
+  return async function handler(req, res) {
+    const started = Date.now();
+    let reservation;
+    let store;
+    let session;
+    let parsed;
+    let day;
+    let resetAt;
+    try {
+      if (req.method !== "POST") return sendError(res, 405, "method_not_allowed", "method not allowed");
+      const contentLength = Number(req.headers["content-length"] || 0);
+      if (!Number.isFinite(contentLength) || contentLength > MAX_BODY_LENGTH) {
+        throw new HttpError(413, "payload_too_large", "payload too large");
+      }
 
-    const accepted = [process.env.APP_TOKEN, process.env.APP_TOKEN_PREV].filter(Boolean);
-    if (accepted.length && !accepted.includes(req.headers["x-paxo-token"])) {
-      return fail(res, 401, "unauthorized");
-    }
+      const runtimeConfig = configLoader();
+      requireAppToken(req, runtimeConfig);
+      const token = bearerToken(req);
+      parsed = buildUpstreamBody(req.body);
+      store = storeFactory(runtimeConfig);
+      session = await store.getSession(hashToken(token));
+      const now = clock();
+      if (!session || Date.parse(session.expiresAt) <= now.getTime()) {
+        throw new HttpError(401, "invalid_session", "session expired");
+      }
 
-    const device = String(req.headers["x-paxo-device"] || "");
-    if (!/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(device)) {
-      return fail(res, 400, "bad device id");
-    }
-    if (!checkRateLimit(device) || !checkDurableLimit(device)) {
-      return fail(res, 429, "rate limited");
-    }
+      const member = requestId();
+      if (!(await store.checkBurst(session.subject, now.getTime(), member))) {
+        throw new HttpError(429, "burst_limit", "too many requests");
+      }
+      ({ day, resetAt } = seoulUsageWindow(now));
+      const limit = TIER_LIMITS[session.tier];
+      if (!limit) throw new HttpError(503, "invalid_tier", "service unavailable");
 
-    if (!process.env.GEMINI_API_KEY) return fail(res, 500, "server misconfigured");
+      if (parsed.kind === "answer") {
+        reservation = await store.reserveAnswer(
+          session.subject,
+          day,
+          parsed.solveId,
+          limit,
+          now.getTime()
+        );
+      } else {
+        reservation = await store.reserveExplanation(session.subject, parsed.solveId);
+      }
+      if (!reservation.allowed) {
+        if (reservation.reason === "daily_limit") {
+          setUsageHeaders(res, session.tier, 0, resetAt);
+        }
+        throw reservationError(reservation.reason);
+      }
 
-    const body = buildUpstreamBody(req.body);
+      let upstream;
+      try {
+        upstream = await fetcher(`${GEMINI_BASE}/${runtimeConfig.model}:generateContent`, {
+          body: JSON.stringify(parsed.upstream),
+          headers: {
+            "content-type": "application/json",
+            "x-goog-api-key": runtimeConfig.geminiApiKey,
+          },
+          method: "POST",
+          signal: AbortSignal.timeout(45_000),
+        });
+      } catch (error) {
+        if (error && (error.name === "TimeoutError" || error.name === "AbortError")) throw error;
+        throw new HttpError(502, "upstream_error", "AI service unavailable");
+      }
+      const responseText = await upstream.text();
+      if (upstream.status !== 200) {
+        await releaseReservation(store, session.subject, day, parsed);
+        return sendError(res, 502, "upstream_error", "AI service unavailable");
+      }
 
-    const model = process.env.MODEL || "gemini-3.6-flash";
-    const upstream = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-goog-api-key": process.env.GEMINI_API_KEY,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
-    });
-    const text = await upstream.text();
-
-    console.log(
-      JSON.stringify({
-        device: device.slice(0, 8),
-        status: upstream.status,
-        ms: Date.now() - started,
-        bytesIn: Number(req.headers["content-length"] || 0),
-      })
-    );
-
-    if (upstream.status === 200 || upstream.status === 429) {
+      let remaining;
+      if (parsed.kind === "answer") {
+        remaining = await store.finalizeAnswer(
+          session.subject,
+          day,
+          parsed.solveId,
+          TIER_LIMITS[session.tier]
+        );
+      } else {
+        await store.finalizeExplanation(session.subject, parsed.solveId);
+        const used = await store.getUsage(session.subject, day);
+        remaining = Math.max(0, TIER_LIMITS[session.tier] - used);
+      }
+      setUsageHeaders(res, session.tier, remaining, resetAt);
+      console.log(
+        JSON.stringify({
+          bytesIn: contentLength,
+          event: "generation_complete",
+          kind: parsed.kind,
+          ms: Date.now() - started,
+          status: 200,
+          subject: session.subject.slice(0, 12),
+        })
+      );
       return res
-        .status(upstream.status)
+        .status(200)
         .setHeader("content-type", "application/json")
-        .send(text);
+        .setHeader("cache-control", "no-store")
+        .send(responseText);
+    } catch (error) {
+      if (reservation && reservation.allowed && store && session && parsed) {
+        try {
+          await releaseReservation(store, session.subject, day, parsed);
+        } catch {
+          // Redis가 실패한 경우 원래 오류만 반환하고 Gemini 재호출은 허용하지 않는다.
+        }
+      }
+      const normalized = normalizeGenerateError(error);
+      console.error(
+        JSON.stringify({ event: "generation_error", code: normalized.code, status: normalized.status })
+      );
+      return sendError(res, normalized.status, normalized.code, normalized.message);
     }
-    // Gemini의 원문은 사용자에게 노출하지 않되, 운영 로그에서 키·모델·권한 문제를 구분한다.
-    const diagnostic = upstreamDiagnostic(text);
-    console.error(
-      JSON.stringify({
-        event: "gemini_upstream_error",
-        status: upstream.status,
-        providerStatus: diagnostic.providerStatus,
-        providerCode: diagnostic.providerCode,
-        providerMessage: diagnostic.providerMessage,
-      })
-    );
-    return fail(res, 502, "upstream error");
-  } catch (err) {
-    if (err && (err.name === "TimeoutError" || err.name === "AbortError")) {
-      return fail(res, 504, "upstream timeout");
-    }
-    if (err && err.status === 400) return fail(res, 400, err.message);
-    console.error("generate error:", err && err.message);
-    return fail(res, 500, "internal error");
-  }
-}
-
-function upstreamDiagnostic(text) {
-  try {
-    const parsed = JSON.parse(text);
-    const error = parsed && typeof parsed === "object" ? parsed.error : null;
-    if (!error || typeof error !== "object") {
-      return { providerStatus: "unknown", providerCode: null, providerMessage: "unknown" };
-    }
-    return {
-      providerStatus: typeof error.status === "string" ? error.status : "unknown",
-      providerCode: Number.isInteger(error.code) ? error.code : null,
-      providerMessage:
-        typeof error.message === "string" ? error.message.slice(0, 300) : "unknown",
-    };
-  } catch {
-    return { providerStatus: "unknown", providerCode: null, providerMessage: "unknown" };
-  }
-}
-
-// Gemini 오류 형식과 동형 — GeminiService.serverMessage가 이 형태 하나만 파싱한다.
-function fail(res, code, message) {
-  return res
-    .status(code)
-    .setHeader("content-type", "application/json")
-    .send(JSON.stringify({ error: { code, message } }));
-}
-
-// 허용: contents[0].parts[] 에서 { text } 1개 + { inline_data:{mime_type,data} } 1개.
-// generationConfig / safetySettings / systemInstruction / tools 등은 조립에 포함 불가.
-function buildUpstreamBody(raw) {
-  const bad = (message) => {
-    throw { status: 400, message };
   };
-  if (!raw || typeof raw !== "object") bad("invalid body");
+}
 
-  const contents = raw.contents;
-  if (!Array.isArray(contents) || contents.length !== 1) bad("invalid contents");
+function buildUpstreamBody(raw) {
+  badUnless(raw && typeof raw === "object" && !Array.isArray(raw), "invalid body");
+  const rootKeys = Object.keys(raw).sort();
+  badUnless(
+    JSON.stringify(rootKeys) === JSON.stringify(["contents", "kind", "solveId"]),
+    "unsupported body field"
+  );
+  badUnless(new Set(["answer", "explanation"]).has(raw.kind), "invalid kind");
+  badUnless(typeof raw.solveId === "string" && SOLVE_ID_PATTERN.test(raw.solveId), "invalid solve id");
+  badUnless(Array.isArray(raw.contents) && raw.contents.length === 1, "invalid contents");
+  badUnless(
+    raw.contents[0] &&
+      typeof raw.contents[0] === "object" &&
+      !Array.isArray(raw.contents[0]) &&
+      Object.keys(raw.contents[0]).length === 1 &&
+      Object.hasOwn(raw.contents[0], "parts"),
+    "invalid contents"
+  );
+  const parts = raw.contents[0].parts;
+  badUnless(Array.isArray(parts) && parts.length === 2, "invalid parts");
 
-  const parts = contents[0] && contents[0].parts;
-  if (!Array.isArray(parts) || parts.length === 0 || parts.length > 2) bad("invalid parts");
-
-  const outParts = [];
-  let hasText = false;
-  let hasImage = false;
-
+  let text;
+  let image;
   for (const part of parts) {
-    if (part && typeof part.text === "string") {
-      if (hasText) bad("duplicate text part");
-      if (part.text.length > MAX_TEXT_LEN) bad("text too long");
-      outParts.push({ text: part.text });
-      hasText = true;
-    } else if (part && part.inline_data && typeof part.inline_data === "object") {
-      if (hasImage) bad("duplicate image part");
-      const mime = part.inline_data.mime_type;
-      const data = part.inline_data.data;
-      if (!ALLOWED_MIME.has(mime)) bad("unsupported mime type");
-      if (typeof data !== "string" || !/^[A-Za-z0-9+/=]+$/.test(data)) bad("invalid image data");
-      if (data.length > MAX_IMAGE_B64) bad("image too large");
-      outParts.push({ inline_data: { mime_type: mime, data } });
-      hasImage = true;
-    } else {
-      bad("unsupported part");
+    badUnless(part && typeof part === "object" && !Array.isArray(part), "unsupported part");
+    if (Object.keys(part).length === 1 && typeof part.text === "string") {
+      badUnless(text === undefined && part.text.length > 0 && part.text.length <= MAX_TEXT_LENGTH, "invalid text");
+      text = { text: part.text };
+      continue;
     }
+    const inline = part.inline_data;
+    badUnless(
+      Object.keys(part).length === 1 &&
+        inline &&
+        typeof inline === "object" &&
+        !Array.isArray(inline) &&
+        JSON.stringify(Object.keys(inline).sort()) === JSON.stringify(["data", "mime_type"]),
+      "unsupported image"
+    );
+    badUnless(image === undefined && ALLOWED_MIME.has(inline.mime_type), "unsupported mime type");
+    badUnless(
+      typeof inline.data === "string" &&
+        inline.data.length > 0 &&
+        inline.data.length <= MAX_IMAGE_BASE64_LENGTH &&
+        inline.data.length % 4 === 0 &&
+        /^[A-Za-z0-9+/]+={0,2}$/.test(inline.data),
+      "invalid image data"
+    );
+    const bytes = Buffer.from(inline.data, "base64");
+    badUnless(matchesMime(bytes, inline.mime_type), "image signature mismatch");
+    image = { inline_data: { data: inline.data, mime_type: inline.mime_type } };
   }
-  if (!hasText || !hasImage) bad("text and image required");
-
-  return { contents: [{ parts: outParts }] };
+  badUnless(text && image, "text and image required");
+  return {
+    kind: raw.kind,
+    solveId: raw.solveId,
+    upstream: {
+      contents: [{ parts: [text, image] }],
+      generationConfig: { maxOutputTokens: raw.kind === "answer" ? 256 : 1024 },
+    },
+  };
 }
 
-function checkRateLimit(device) {
-  const day = new Date().toISOString().slice(0, 10);
-  const entry = memUsage.get(device);
-  if (!entry || entry.day !== day) {
-    memUsage.set(device, { count: 1, day });
-    if (memUsage.size > 10_000) memUsage.clear(); // 메모리 폭주 방지
-    return true;
+function matchesMime(bytes, mime) {
+  if (mime === "image/jpeg") {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
   }
-  entry.count += 1;
-  return entry.count <= DAILY_LIMIT;
+  return (
+    bytes.length >= 8 &&
+    bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  );
 }
 
-// 내구성 있는 기기별 한도 자리(현재 no-op). 향후 Upstash Redis를 여기에 끼운다.
-// eslint-disable-next-line no-unused-vars
-function checkDurableLimit(device) {
-  return true;
+function badUnless(condition, message) {
+  if (!condition) throw new HttpError(400, "invalid_request", message);
 }
+
+function reservationError(reason) {
+  if (reason === "daily_limit") return new HttpError(429, "daily_limit", "daily limit reached");
+  if (reason === "answer_required") return new HttpError(409, "answer_required", "answer required");
+  if (reason === "duplicate" || reason === "in_flight") {
+    return new HttpError(409, "duplicate_request", "request already processed");
+  }
+  return new HttpError(503, "service_unavailable", "service unavailable");
+}
+
+async function releaseReservation(store, subject, day, parsed) {
+  if (parsed.kind === "answer") {
+    await store.releaseAnswer(subject, day, parsed.solveId);
+  } else {
+    await store.releaseExplanation(subject, parsed.solveId);
+  }
+}
+
+function normalizeGenerateError(error) {
+  if (error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    return new HttpError(504, "upstream_timeout", "AI service timed out");
+  }
+  if (error instanceof HttpError) return error;
+  const normalized = asHttpError(error);
+  if (normalized.status !== 500) return normalized;
+  return new HttpError(503, "service_unavailable", "service unavailable");
+}
+
+export { buildUpstreamBody, createGenerateHandler };
+export default createGenerateHandler();

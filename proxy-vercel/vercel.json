@@ -1,10 +1,15 @@
 {
   "regions": ["iad1"],
   "functions": {
-    "api/*.js": { "maxDuration": 60 }
+    "api/*.js": { "includeFiles": "certs/**", "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/generate", "destination": "/api/generate" },
+    { "source": "/session", "destination": "/api/session" },
+    { "source": "/session/challenge", "destination": "/api/session-challenge" },
+    { "source": "/session/refresh", "destination": "/api/session-refresh" },
+    { "source": "/session/logout", "destination": "/api/session-logout" },
+    { "source": "/account", "destination": "/api/account" },
     { "source": "/privacy", "destination": "/api/privacy" }
   ]
 }

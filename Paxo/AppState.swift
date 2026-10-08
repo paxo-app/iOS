@@ -1,4 +1,5 @@
 import AppKit
+import AuthenticationServices
 import Combine
 import ServiceManagement
 
@@ -8,6 +9,7 @@ final class AppState: ObservableObject {
 
     enum SolvePhase: Equatable {
         case idle
+        case checkingAccess
         case capturing
         case solvingAnswer
         case answerReady
@@ -21,6 +23,20 @@ final class AppState: ObservableObject {
     @Published private(set) var current: SolveResult?
     @Published private(set) var history: [SolveResult] = []
 
+    enum AuthenticationPhase: Equatable {
+        case preparing
+        case signedOut
+        case signingIn
+        case signedIn
+        case failed(String)
+    }
+
+    @Published private(set) var authenticationPhase: AuthenticationPhase = .preparing
+    @Published private(set) var isAppleSignInReady = false
+    @Published private(set) var remainingToday = 0
+    @Published private(set) var serverTier: ProxyTier = .free
+    @Published private(set) var usageResetAt: Date?
+
     // MARK: - 설정
 
     /// 빠른 채점 모드: 정답을 먼저 크게 표시하고, 해설은 "해설 보기"를 눌렀을 때 생성.
@@ -28,6 +44,20 @@ final class AppState: ObservableObject {
     @Published var quickCheckMode: Bool {
         didSet { UserDefaults.standard.set(quickCheckMode, forKey: "quickCheckMode") }
     }
+    @Published var showsRecentHistory: Bool {
+        didSet { UserDefaults.standard.set(showsRecentHistory, forKey: "showsRecentHistory") }
+    }
+    @Published var historyShowsExplanation: Bool {
+        didSet { UserDefaults.standard.set(historyShowsExplanation, forKey: "historyShowsExplanation") }
+    }
+    @Published var recentHistoryLimit: Int {
+        didSet { UserDefaults.standard.set(recentHistoryLimit, forKey: "recentHistoryLimit") }
+    }
+
+    var recentHistory: [SolveResult] {
+        Array(history.prefix(min(max(recentHistoryLimit, 1), 100)))
+    }
+
     @Published var preset: SubjectPreset {
         didSet { UserDefaults.standard.set(preset.rawValue, forKey: "preset") }
     }
@@ -88,7 +118,8 @@ final class AppState: ObservableObject {
         }
     }
     private var isSyncingLaunchAtLogin = false
-    /// 프록시 서버 URL. 직접 호출이 꺼져 있으면 이 값을 우선 사용한다.
+    #if DEBUG
+    /// 개발 빌드에서만 프록시 계약을 독립적으로 검증한다.
     @Published var proxyURL: String {
         didSet { UserDefaults.standard.set(proxyURL, forKey: "proxyURL") }
     }
@@ -96,21 +127,13 @@ final class AppState: ObservableObject {
     @Published var apiKey: String {
         didSet { KeychainHelper.save(key: "gemini-api-key", value: apiKey) }
     }
-    #if DEBUG
-    /// 프록시 장애와 Gemini API 설정을 독립적으로 확인하기 위한 개발용 선택지.
     @Published var useDirectGemini: Bool {
         didSet { UserDefaults.standard.set(useDirectGemini, forKey: "useDirectGemini") }
     }
     #endif
 
-    /// 프록시의 사용량 집계용 익명 기기 식별자
-    let deviceID: String
-
     /// 구독 상태 관리 (뷰에는 별도 environmentObject로 주입)
     let store = StoreManager()
-
-    /// 오늘 남은 무료 풀이 횟수 (메뉴 표시용)
-    @Published private(set) var freeRemaining: Int = UsageTracker.dailyFreeLimit
 
     var canRequestExplanation: Bool {
         guard let current, current.explanation == nil else { return false }
@@ -124,17 +147,22 @@ final class AppState: ObservableObject {
     private let paywallWindow = PaywallWindowController()
     private let onboardingWindow = OnboardingWindowController()
     private let historyStore = HistoryStore()
-    private let usage = UsageTracker()
-    /// 세션 내 캡처 이미지 캐시 (SolveResult.id 키). 해설 재생성용. 디스크 저장 안 함.
+    private let sessionManager = ProxySessionManager()
+    /// 메모리 사용을 제한하고 오래된 문제 이미지는 필요할 때 로컬 기록에서 다시 읽는다.
     private var imageCache: [UUID: Data] = [:]
     private var imageCacheOrder: [UUID] = []
     private static let imageCacheLimit = 8
     /// 마지막으로 캡처한 화면 — 결과 패널/토스트를 같은 화면에 띄우기 위함
     private var lastCaptureScreen: NSScreen?
     private var toastDismissTask: Task<Void, Never>?
+    private var credentialRevocationTask: Task<Void, Never>?
+    private static let appleUserKey = "apple-user-identifier"
 
     private init() {
         quickCheckMode = UserDefaults.standard.bool(forKey: "quickCheckMode")
+        showsRecentHistory = UserDefaults.standard.object(forKey: "showsRecentHistory") as? Bool ?? true
+        historyShowsExplanation = UserDefaults.standard.object(forKey: "historyShowsExplanation") as? Bool ?? true
+        recentHistoryLimit = min(max(UserDefaults.standard.object(forKey: "recentHistoryLimit") as? Int ?? 5, 1), 100)
         preset = SubjectPreset(rawValue: UserDefaults.standard.string(forKey: "preset") ?? "") ?? .general
         captureMode = CaptureMode(rawValue: UserDefaults.standard.string(forKey: "captureMode") ?? "") ?? .region
         panelPosition =
@@ -149,30 +177,36 @@ final class AppState: ObservableObject {
         } else {
             hotkey = .default
         }
-        proxyURL = UserDefaults.standard.string(forKey: "proxyURL") ?? ""
-        apiKey = KeychainHelper.load(key: "gemini-api-key") ?? ""
         #if DEBUG
+        proxyURL =
+            UserDefaults.standard.string(forKey: "proxyURL") ?? DefaultConfig.developmentProxyURL
+        apiKey = KeychainHelper.load(key: "gemini-api-key") ?? ""
         useDirectGemini = UserDefaults.standard.bool(forKey: "useDirectGemini")
         #endif
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
-
-        if let existing = UserDefaults.standard.string(forKey: "deviceID") {
-            deviceID = existing
-        } else {
-            let fresh = UUID().uuidString
-            UserDefaults.standard.set(fresh, forKey: "deviceID")
-            deviceID = fresh
-        }
     }
 
     func start() {
         history = historyStore.load()
-        freeRemaining = usage.remainingToday()
+        #if DEBUG
+        sessionManager.developmentProxyURL = proxyURL
+        #endif
+        store.onEntitlementsChanged = { [weak self] in
+            await self?.refreshServerEntitlements()
+        }
         store.start()
         hotkeyManager.onHotkey = { [weak self] in
             self?.beginSolve()
         }
         hotkeyManager.register(hotkey)
+        credentialRevocationTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(
+                named: ASAuthorizationAppleIDProvider.credentialRevokedNotification
+            ) {
+                await self?.handleCredentialRevocation()
+            }
+        }
+        Task { await restoreAuthentication() }
 
         if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             showOnboarding()
@@ -189,43 +223,275 @@ final class AppState: ObservableObject {
     func suspendHotkey() { hotkeyManager.unregister() }
     func resumeHotkey() { hotkeyManager.register(hotkey) }
 
+    func configureAppleSignIn(_ request: ASAuthorizationAppleIDRequest) {
+        guard let nonce = sessionManager.pendingNonce else {
+            authenticationPhase = .failed("로그인 준비가 완료되지 않았습니다. 잠시 후 다시 시도해주세요.")
+            return
+        }
+        request.requestedScopes = []
+        request.nonce = ProxySessionManager.nonceDigest(nonce)
+        authenticationPhase = .signingIn
+    }
+
+    func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        Task { await completeAppleSignIn(result) }
+    }
+
+    func retryAppleSignInPreparation() {
+        Task {
+            if KeychainHelper.load(key: Self.appleUserKey)?.isEmpty == false {
+                await restoreAuthentication()
+            } else {
+                await prepareAppleSignIn()
+            }
+        }
+    }
+
+    func signOut() {
+        Task {
+            await sessionManager.logout()
+            KeychainHelper.save(key: Self.appleUserKey, value: "")
+            resetAuthentication()
+            await prepareAppleSignIn()
+        }
+    }
+
+    func deleteAccount() {
+        Task {
+            do {
+                try await sessionManager.deleteAccount()
+                KeychainHelper.save(key: Self.appleUserKey, value: "")
+                resetAuthentication()
+                await prepareAppleSignIn()
+            } catch {
+                authenticationPhase = .failed(errorMessage(from: error))
+            }
+        }
+    }
+
     func beginSolve() {
         switch phase {
-        case .capturing, .solvingAnswer, .solvingExplanation:
+        case .checkingAccess, .capturing, .solvingAnswer, .solvingExplanation:
             return
         default:
             break
         }
-        // 무료 한도 소진 + 미구독이면 캡처 전에 페이월 표시
-        if !store.isPro && usage.remainingToday() == 0 {
-            showPaywall()
-            return
-        }
-        phase = .capturing
-        Task { await runSolve() }
+        Task { await prepareAndRunSolve() }
     }
 
     func showPaywall() {
         paywallWindow.show(store: store)
+        Task { await store.reloadProductsIfNeeded() }
     }
 
-    /// 메뉴가 열릴 때 남은 무료 횟수를 다시 계산 (자정 넘김 반영)
+    /// 메뉴가 열릴 때 서버 정본을 새로 읽어 자정 초기화와 구독 변경을 반영한다.
     func refreshFreeRemaining() {
-        freeRemaining = usage.remainingToday()
+        Task {
+            guard case .signedIn = authenticationPhase else { return }
+            if let session = try? await sessionManager.session(forceRefresh: true) {
+                apply(session)
+            }
+        }
     }
 
-    func showFromHistory(_ item: SolveResult) {
-        // 기록 다시 보기는 항상 패널로 (해설 확인·재생성 가능).
-        // 같은 세션에 캡처 이미지가 캐시에 남아 있으면 "해설 보기"로 재생성 가능.
+    /// 패널 안의 홈에서 기록을 열 때는 현재 창을 닫지 않고 상세 화면으로 전환한다.
+    @discardableResult
+    func showFromHistory(_ item: SolveResult, presentPanel: Bool = true, dismissPanel: Bool = true) -> Bool {
+        guard !isSolving else { return false }
         toastDismissTask?.cancel()
         toast.dismiss()
+        if imageCache[item.id] == nil, let image = historyStore.loadImage(for: item), NSImage(data: image) != nil {
+            cacheImage(image, for: item.id)
+        }
         current = item
         phase = item.explanation == nil ? .answerReady : .done
-        resultPanel.show(appState: self, on: Self.screenUnderMouse())
+        if presentPanel {
+            resultPanel.show(appState: self, on: Self.screenUnderMouse())
+        } else if dismissPanel {
+            resultPanel.hide()
+        }
+        return true
+    }
+
+    var isSolving: Bool {
+        switch phase {
+        case .checkingAccess, .capturing, .solvingAnswer, .solvingExplanation: return true
+        default: return false
+        }
+    }
+
+    func historyImage(for item: SolveResult) -> NSImage? {
+        guard let data = imageCache[item.id] ?? historyStore.loadImage(for: item) else { return nil }
+        return NSImage(data: data)
+    }
+
+    func updateCorrectness(_ correctness: SolveCorrectness) {
+        guard let result = current, result.answer != nil else { return }
+        current?.correctness = result.correctness == correctness ? nil : correctness
+        upsertHistory()
     }
 
     func requestExplanation() {
         Task { await runExplanation() }
+    }
+
+    private func restoreAuthentication() async {
+        authenticationPhase = .preparing
+        guard let userID = KeychainHelper.load(key: Self.appleUserKey), !userID.isEmpty else {
+            sessionManager.clearCredentials()
+            await prepareAppleSignIn()
+            return
+        }
+        guard let state = await credentialState(for: userID) else {
+            authenticationPhase = .failed(
+                "Apple 로그인 상태를 확인하지 못했습니다. 네트워크 상태를 확인하고 다시 시도해주세요."
+            )
+            return
+        }
+        guard state == .authorized else {
+            sessionManager.clearCredentials()
+            KeychainHelper.save(key: Self.appleUserKey, value: "")
+            await prepareAppleSignIn()
+            return
+        }
+        do {
+            let session = try await sessionManager.session(forceRefresh: true)
+            apply(session)
+            authenticationPhase = .signedIn
+        } catch {
+            authenticationPhase = .failed(errorMessage(from: error))
+            if let sessionError = error as? ProxySessionError,
+                case .signInRequired = sessionError
+            {
+                sessionManager.clearCredentials()
+                KeychainHelper.save(key: Self.appleUserKey, value: "")
+                await prepareAppleSignIn(preserveError: true)
+            }
+        }
+    }
+
+    private func prepareAppleSignIn(preserveError: Bool = false) async {
+        if !preserveError { authenticationPhase = .preparing }
+        isAppleSignInReady = false
+        do {
+            _ = try await sessionManager.prepareChallenge()
+            isAppleSignInReady = true
+            if !preserveError { authenticationPhase = .signedOut }
+        } catch {
+            authenticationPhase = .failed(errorMessage(from: error))
+        }
+    }
+
+    private func completeAppleSignIn(_ result: Result<ASAuthorization, Error>) async {
+        do {
+            let authorization = try result.get()
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                let identityData = credential.identityToken,
+                let identityToken = String(data: identityData, encoding: .utf8),
+                let codeData = credential.authorizationCode,
+                let authorizationCode = String(data: codeData, encoding: .utf8)
+            else {
+                throw ProxySessionError.appleVerificationFailed
+            }
+            let session = try await sessionManager.signIn(
+                identityToken: identityToken,
+                authorizationCode: authorizationCode
+            )
+            KeychainHelper.save(key: Self.appleUserKey, value: credential.user)
+            apply(session)
+            authenticationPhase = .signedIn
+            isAppleSignInReady = false
+        } catch let error as ASAuthorizationError where error.code == .canceled {
+            authenticationPhase = .signedOut
+            await prepareAppleSignIn()
+        } catch {
+            authenticationPhase = .failed(errorMessage(from: error))
+            await prepareAppleSignIn(preserveError: true)
+        }
+    }
+
+    private func credentialState(
+        for userID: String
+    ) async -> ASAuthorizationAppleIDProvider.CredentialState? {
+        await withCheckedContinuation { continuation in
+            ASAuthorizationAppleIDProvider().getCredentialState(forUserID: userID) { state, error in
+                continuation.resume(returning: error == nil ? state : nil)
+            }
+        }
+    }
+
+    private func handleCredentialRevocation() async {
+        await sessionManager.logout()
+        KeychainHelper.save(key: Self.appleUserKey, value: "")
+        resetAuthentication()
+        await prepareAppleSignIn()
+    }
+
+    private func refreshServerEntitlements() async {
+        guard case .signedIn = authenticationPhase else { return }
+        do {
+            let session = try await sessionManager.session(forceRefresh: true)
+            apply(session)
+        } catch {
+            authenticationPhase = .failed(errorMessage(from: error))
+        }
+    }
+
+    private func resetAuthentication() {
+        authenticationPhase = .signedOut
+        remainingToday = 0
+        serverTier = .free
+        usageResetAt = nil
+    }
+
+    private func apply(_ session: ProxySession) {
+        remainingToday = session.remainingToday
+        serverTier = session.tier
+        usageResetAt = session.resetAt
+    }
+
+    private func apply(_ result: GenerationResult) {
+        if let remaining = result.remainingToday { remainingToday = remaining }
+        if let resetAt = result.resetAt { usageResetAt = resetAt }
+        if let tier = result.tier { serverTier = tier }
+    }
+
+    private func prepareAndRunSolve() async {
+        #if DEBUG
+        if useDirectGemini {
+            phase = .capturing
+            await runSolve()
+            return
+        }
+        #endif
+        guard case .signedIn = authenticationPhase else {
+            authenticationPhase = .failed("Paxo를 사용하려면 Apple로 로그인해주세요.")
+            await prepareAppleSignIn(preserveError: true)
+            return
+        }
+        phase = .checkingAccess
+        do {
+            let session = try await sessionManager.session(forceRefresh: true)
+            apply(session)
+            guard session.remainingToday > 0 else {
+                phase = .idle
+                if session.tier == .free {
+                    showPaywall()
+                } else {
+                    phase = .failedAnswer("Pro의 일일 안전 한도 100회를 모두 사용했습니다. 내일 다시 이용해주세요.")
+                    resultPanel.show(appState: self, on: Self.screenUnderMouse())
+                }
+                return
+            }
+            phase = .capturing
+            await runSolve()
+        } catch {
+            phase = .idle
+            authenticationPhase = .failed(errorMessage(from: error))
+            if case ProxySessionError.signInRequired = error {
+                await prepareAppleSignIn(preserveError: true)
+            }
+        }
     }
 
     private func runSolve() async {
@@ -242,17 +508,18 @@ final class AppState: ObservableObject {
             phase = .solvingAnswer
             presentSolving()
 
-            let answer = try await makeService()
-                .answer(imageData: capture.data, preset: preset)
-            current?.answer = answer
+            let generated = try await requestAnswer(
+                imageData: capture.data,
+                preset: preset,
+                solveID: result.id
+            )
+            apply(generated)
+            current?.answer = generated.text
+            if let id = current?.id {
+                current?.imageFileName = historyStore.saveImage(capture.data, for: id)
+            }
             phase = .answerReady
             upsertHistory()
-
-            // 해설은 풀이 1회에 포함 — 정답 호출 성공 시에만 무료 사용량 차감
-            if !store.isPro {
-                usage.recordUse()
-                freeRemaining = usage.remainingToday()
-            }
 
             if resultDisplayMode == .toast {
                 toast.show(appState: self, on: lastCaptureScreen)
@@ -260,6 +527,16 @@ final class AppState: ObservableObject {
             } else if !quickCheckMode {
                 await runExplanation()
             }
+        } catch GeminiError.freeDailyLimit {
+            toast.dismiss()
+            remainingToday = 0
+            phase = .idle
+            showPaywall()
+        } catch GeminiError.proDailyLimit {
+            toast.dismiss()
+            remainingToday = 0
+            phase = .failedAnswer("Pro의 일일 안전 한도 100회를 모두 사용했습니다. 내일 다시 이용해주세요.")
+            resultPanel.show(appState: self, on: lastCaptureScreen)
         } catch {
             toast.dismiss()
             phase = .failedAnswer(errorMessage(from: error))
@@ -297,9 +574,14 @@ final class AppState: ObservableObject {
         else { return }
         phase = .solvingExplanation
         do {
-            let explanation = try await makeService()
-                .explain(imageData: image, answer: answer, preset: preset)
-            self.current?.explanation = explanation
+            let generated = try await requestExplanation(
+                imageData: image,
+                answer: answer,
+                preset: preset,
+                solveID: current.id
+            )
+            apply(generated)
+            self.current?.explanation = generated.text
             phase = .done
             upsertHistory()
         } catch {
@@ -326,12 +608,66 @@ final class AppState: ObservableObject {
         GeminiService(
             apiKey: apiKey,
             proxyURL: proxyURL,
-            deviceID: deviceID,
             useDirectGemini: useDirectGemini
         )
         #else
-        GeminiService(apiKey: apiKey, proxyURL: proxyURL, deviceID: deviceID, useDirectGemini: false)
+        GeminiService(apiKey: "", proxyURL: DefaultConfig.proxyURL, useDirectGemini: false)
         #endif
+    }
+
+    private func requestAnswer(
+        imageData: Data,
+        preset: SubjectPreset,
+        solveID: UUID
+    ) async throws -> GenerationResult {
+        let service = makeService()
+        #if DEBUG
+        if useDirectGemini {
+            return try await service.answer(
+                imageData: imageData,
+                preset: preset,
+                sessionToken: "development-direct-call",
+                solveID: solveID
+            )
+        }
+        #endif
+        return try await sessionManager.withSessionRetry { session in
+            try await service.answer(
+                imageData: imageData,
+                preset: preset,
+                sessionToken: session.sessionToken,
+                solveID: solveID
+            )
+        }
+    }
+
+    private func requestExplanation(
+        imageData: Data,
+        answer: String,
+        preset: SubjectPreset,
+        solveID: UUID
+    ) async throws -> GenerationResult {
+        let service = makeService()
+        #if DEBUG
+        if useDirectGemini {
+            return try await service.explain(
+                imageData: imageData,
+                answer: answer,
+                preset: preset,
+                sessionToken: "development-direct-call",
+                solveID: solveID
+            )
+        }
+        #endif
+        return try await sessionManager.withSessionRetry { session in
+            try await service.explain(
+                imageData: imageData,
+                answer: answer,
+                preset: preset,
+                sessionToken: session.sessionToken,
+                solveID: solveID
+            )
+        }
     }
 
     private func upsertHistory() {

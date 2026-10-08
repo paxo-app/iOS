@@ -25,9 +25,12 @@
 
 | 뷰 (View) | 주입 객체 (`@EnvironmentObject`) |
 | --- | --- |
-| `MenuContentView`, `SettingsView` | `appState` + `store` |
+| `MenuContentView` | `appState` **만 주입** |
+| `SettingsView` | `appState` + `store` |
 | `ResultView`, `ToastView`, `OnboardingView` | `appState` **만 주입** |
 | `PaywallView` | `store` **만 주입** |
+
+결과 패널의 루트(`ResultPanelContentView`)와 내부 홈·결과 화면은 모두 `appState`만 사용한다. 구독 상태가 필요한 화면은 기존 표의 주입 경로를 유지한다.
 
 **위 표에 명시되지 않은 객체를 뷰에서 `@EnvironmentObject`로 선언할 경우 런타임 크래시가 발생한다.** 의존성 추가가 불가피하다면 해당 컨트롤러(`ResultPanelController`, `ToastController` 등)의 뷰 초기화/주입 로직을 함께 수정해야 한다.
 
@@ -41,15 +44,16 @@
 * **이미지 포맷**: 캡처 결과물은 항상 **JPEG** 포맷이다 (PNG 가정 금지). 용량 최적화를 위해 `compressionFactor 0.82`, 최대 2000px로 리사이징(축소)한다.
 * **이중 좌표계**: AppKit은 좌하단(Bottom-Left)이 원점이고, 디스플레이 로컬 좌표계는 좌상단(Top-Left)이 원점이다. `ScreenCapturer`에서 이를 변환하여 사용하며, `PanelPosition.origin`은 AppKit 기준을 가정한다. 이는 다중 모니터 대응 시 가장 잦은 버그 발생 원인이므로 주의한다.
 * **백그라운드 실행 (`LSUIElement = true`)**: Dock 아이콘이 없는 백그라운드 앱이므로 창을 화면에 띄우려면 `NSApp.activate(ignoringOtherApps:)`, `.nonactivatingPanel`, `orderFrontRegardless()` 등의 명시적 호출이 필수다. `SettingsLink` 조차 활성화 제스처를 덧붙여야 정상 작동한다.
-* **화면 기록 권한(TCC) 정책**: 권한 승인 플로우 특성상 **앱을 2회 실행해야 정상 작동**한다. `CGRequestScreenCaptureAccess()`는 권한 요청만 띄우고 즉시 `false`를 반환하므로 최초 캡처 시도는 항상 실패하는 것이 시스템 정상 스펙이다. (Xcode 재빌드 시 권한이 조용히 말소될 수 있음에 유의한다.)
-* **이미지 캐시 무상태성**: `imageCache`는 인메모리 상에서 최대 8개까지만 유지되며 디스크에 영속화(Persist)하지 않는다. 과거 히스토리 항목에서 해설을 재생성할 수 없는 것은 버그가 아니라 의도된 설계다.
+* **화면 기록 권한(TCC) 정책**: 캡처에 사용하는 `SCShareableContent`의 응답으로 접근을 확인한다. 최초 권한 승인 뒤에는 macOS가 앱 재실행을 요구할 수 있다. Xcode의 로컬 임시 서명으로 재빌드하면 기존 권한이 현재 실행 파일에 적용되지 않을 수 있다.
+* **이미지 캐시와 로컬 기록**: `imageCache`는 메모리에서 최대 8개만 유지한다. 풀이에 성공한 문제 이미지는 `HistoryStore`가 샌드박스 내 `HistoryImages/`에 JPEG로 저장하며 최근 100개 기록과 함께 보관한다. 과거 기록을 열 때 이미지를 캐시에 다시 읽어 해설을 생성할 수 있지만, 이미지가 없거나 손상된 경우에는 안전한 빈 상태를 표시한다.
 * **단축키 API**: 손쉬운 사용(Accessibility) 권한 요구를 피하고 Mac App Store 심사를 통과하기 위해 Carbon의 `RegisterEventHotKey` API를 사용한다. 절대 다른 API로 교체하지 않는다.
 
 ## 6. 과금 비즈니스 로직 (수정 전 필독)
 
-무료 사용량 차감 규칙은 비대칭적이며, 이는 서비스 매출과 직결되는 핵심 경로(Critical Path)다.
+사용량의 정본은 서버 Redis이며, 이는 서비스 매출과 직결되는 핵심 경로(Critical Path)다.
 
-* 무료 횟수는 **API 정답 호출이 성공한 직후에만** 1회 차감한다.
+* 무료 3회와 Pro 100회 한도는 **API 정답 호출이 성공한 직후에만** 서버에서 1회 차감한다.
 * 해설 생성(2차 호출)이 실패하더라도 **횟수를 재차감하지 않는다.** (정답을 이미 제공받았기 때문)
-* 무료 횟수 소진 여부 및 페이월(Paywall) 표시는 **캡처를 실행하기 전**에 사전 검증한다.
+* 횟수 소진 여부 및 페이월(Paywall) 표시는 **캡처를 실행하기 전**에 서버 세션으로 사전 검증한다.
+* `StoreManager.isPro`와 로컬 값으로 AI 접근을 허용하지 않는다. 서버가 반환한 tier만 사용한다.
 * 토스트 모드(Toast Mode)에서는 의도적으로 해설 API를 호출하지 않도록 제어해야 한다.
