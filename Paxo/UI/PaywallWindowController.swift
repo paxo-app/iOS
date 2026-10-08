@@ -9,12 +9,14 @@ final class PaywallWindowController {
         if window == nil {
             let newWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 340, height: 460),
-                styleMask: [.titled, .closable, .fullSizeContentView],
+                styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
             newWindow.title = "Paxo Pro"
-            newWindow.titlebarAppearsTransparent = true
+            newWindow.titlebarAppearsTransparent = false
+            newWindow.isOpaque = false
+            newWindow.backgroundColor = .clear
             newWindow.isReleasedWhenClosed = false
             newWindow.contentView = NSHostingView(
                 rootView: PaywallView().environmentObject(store)

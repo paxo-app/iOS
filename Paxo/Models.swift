@@ -100,14 +100,43 @@ enum ResultDisplayMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum SolveCorrectness: String, Codable {
+    case correct
+    case incorrect
+
+    var displayName: String {
+        switch self {
+        case .correct: return "정답"
+        case .incorrect: return "오답"
+        }
+    }
+}
+
 struct SolveResult: Identifiable, Codable, Equatable {
     var id = UUID()
     var date = Date()
     var preset: SubjectPreset
     var answer: String?
     var explanation: String?
+    var imageFileName: String?
+    var correctness: SolveCorrectness?
 
     init(preset: SubjectPreset) {
         self.preset = preset
+    }
+
+    var explanationSummary: String {
+        guard let explanation else { return "저장된 해설이 없습니다." }
+        let summary =
+            explanation
+            .split(separator: "\n")
+            .filter { !["---", "***", "___"].contains($0.trimmingCharacters(in: .whitespaces)) }
+            .map { $0.trimmingCharacters(in: .whitespaces).drop(while: { $0 == "#" }) }
+            .joined(separator: " ")
+            .replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(of: "__", with: "")
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+        return summary.isEmpty ? "저장된 해설이 없습니다." : summary
     }
 }

@@ -3,8 +3,26 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var store: StoreManager
+    @State private var recentHistoryLimitText = ""
+    @FocusState private var isEditingHistoryLimit: Bool
 
     var body: some View {
+        TabView {
+            generalSettings.tabItem { Label("설정", systemImage: "gearshape") }
+            HistoryArchiveView().tabItem { Label("풀이 기록", systemImage: "clock.arrow.circlepath") }
+        }
+        .frame(width: 460, height: 660)
+        .paxoSurface(cornerRadius: 0)
+        .onAppear { recentHistoryLimitText = String(appState.recentHistoryLimit) }
+        .onChange(of: isEditingHistoryLimit) {
+            if !isEditingHistoryLimit { saveRecentHistoryLimit() }
+        }
+        .onChange(of: appState.recentHistoryLimit) {
+            recentHistoryLimitText = String(appState.recentHistoryLimit)
+        }
+    }
+
+    private var generalSettings: some View {
         Form {
             Section("계정") {
                 switch appState.authenticationPhase {
@@ -83,6 +101,29 @@ struct SettingsView: View {
                         Text(preset.displayName).tag(preset)
                     }
                 }
+            }
+
+            Section("최근 풀이") {
+                Toggle("메뉴에 최근 풀이 표시", isOn: $appState.showsRecentHistory)
+                Picker("풀이 표시", selection: $appState.historyShowsExplanation) {
+                    Text("정답만 표시").tag(false)
+                    Text("해설과 함께 표시").tag(true)
+                }
+                LabeledContent("메뉴에 표시할 풀이 수") {
+                    TextField("", text: $recentHistoryLimitText)
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 60)
+                        .focused($isEditingHistoryLimit)
+                        .onSubmit { saveRecentHistoryLimit() }
+                        .onDisappear { saveRecentHistoryLimit() }
+                        .accessibilityLabel("메뉴에 표시할 풀이 수")
+                }
+                .disabled(!appState.showsRecentHistory)
+                Text("메뉴에는 최신 풀이를 설정한 개수만큼 표시합니다. 이전 풀이는 풀이 기록 탭에서 볼 수 있습니다. 정답만 표시해도 저장된 해설은 기록을 열어 볼 수 있습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("캡처") {
@@ -181,7 +222,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 660)
+        .scrollContentBackground(.hidden)
+        .tint(PaxoStyle.brand)
         .alert("Paxo 계정을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
             Button("취소", role: .cancel) {}
             Button("계정 삭제", role: .destructive) {
@@ -200,5 +242,12 @@ struct SettingsView: View {
         components.path = "paxo.app.official@gmail.com"
         components.queryItems = [URLQueryItem(name: "subject", value: "Paxo 의견 보내기")]
         return components.url
+    }
+
+    private func saveRecentHistoryLimit() {
+        if let count = Int(recentHistoryLimitText.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            appState.recentHistoryLimit = min(max(count, 1), 100)
+        }
+        recentHistoryLimitText = String(appState.recentHistoryLimit)
     }
 }

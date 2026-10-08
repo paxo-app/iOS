@@ -7,8 +7,21 @@ final class ScreenCapturer {
 
     @MainActor
     func captureInteractive(mode: CaptureMode) async throws -> Capture? {
-        guard ensurePermission() else {
-            throw CaptureError.noPermission
+        // 캡처에 사용하는 API로 권한을 확인해 별도 권한 요청과 오류 표시가 겹치지 않게 한다.
+        let content: SCShareableContent
+        do {
+            content = try await SCShareableContent.excludingDesktopWindows(
+                false,
+                onScreenWindowsOnly: true
+            )
+        } catch {
+            let nsError = error as NSError
+            if nsError.domain == SCStreamErrorDomain,
+                nsError.code == SCStreamError.Code.userDeclined.rawValue
+            {
+                throw CaptureError.noPermission
+            }
+            throw error
         }
         switch mode {
         case .region:
@@ -17,7 +30,7 @@ final class ScreenCapturer {
             }
             // 오버레이 윈도우가 화면에서 사라질 시간을 준다.
             try? await Task.sleep(nanoseconds: 150_000_000)
-            let data = try await capture(rect: selection.rect, on: selection.screen)
+            let data = try await capture(rect: selection.rect, on: selection.screen, content: content)
             return (data, selection.screen)
         case .fullScreen:
             // 마우스 커서가 있는 화면 전체를 즉시 캡처
@@ -26,24 +39,12 @@ final class ScreenCapturer {
                 NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
                 ?? NSScreen.main
             guard let screen else { throw CaptureError.displayNotFound }
-            let data = try await capture(rect: screen.frame, on: screen)
+            let data = try await capture(rect: screen.frame, on: screen, content: content)
             return (data, screen)
         }
     }
 
-    private func ensurePermission() -> Bool {
-        if CGPreflightScreenCaptureAccess() {
-            return true
-        }
-        CGRequestScreenCaptureAccess()
-        return false
-    }
-
-    private func capture(rect: CGRect, on screen: NSScreen) async throws -> Data {
-        let content = try await SCShareableContent.excludingDesktopWindows(
-            false,
-            onScreenWindowsOnly: true
-        )
+    private func capture(rect: CGRect, on screen: NSScreen, content: SCShareableContent) async throws -> Data {
         guard
             let screenNumber = screen.deviceDescription[
                 NSDeviceDescriptionKey("NSScreenNumber")

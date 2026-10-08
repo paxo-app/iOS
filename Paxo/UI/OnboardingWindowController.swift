@@ -9,12 +9,14 @@ final class OnboardingWindowController {
         if window == nil {
             let newWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 440, height: 440),
-                styleMask: [.titled, .closable, .fullSizeContentView],
+                styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
             newWindow.title = "Paxo 시작하기"
-            newWindow.titlebarAppearsTransparent = true
+            newWindow.titlebarAppearsTransparent = false
+            newWindow.isOpaque = false
+            newWindow.backgroundColor = .clear
             newWindow.isReleasedWhenClosed = false
             newWindow.contentView = NSHostingView(
                 rootView: OnboardingView(onFinish: { [weak self] in

@@ -84,11 +84,7 @@ private struct ToastView: View {
         content
             .padding(.horizontal, 22)
             .padding(.vertical, 14)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
-            )
+            .paxoSurface(cornerRadius: 16)
     }
 
     @ViewBuilder

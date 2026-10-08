@@ -2,19 +2,38 @@ import AuthenticationServices
 import SwiftUI
 
 struct MenuContentView: View {
+    var keepsResultPanelVisible = false
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var store: StoreManager
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("recentHistoryExpanded") private var historyExpanded = true
+    @State private var showsDetail = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                PaxoAppIcon()
-                    .frame(width: 18, height: 18)
-                Text("Paxo").font(.headline)
+        Group {
+            if showsDetail {
+                ResultView(onBack: { showsDetail = false }, isHistory: true)
+                    .frame(width: 360, height: 500)
+            } else {
+                menuContent
+            }
+        }
+        .onAppear { appState.refreshFreeRemaining() }
+    }
+
+    private var menuContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image("PaxoMenuBar")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .foregroundStyle(.primary)
+                    .accessibilityHidden(true)
+                Text("Paxo").font(.title3.bold())
                 Spacer()
             }
-            .onAppear { appState.refreshFreeRemaining() }
-
             if appState.authenticationPhase == .signedIn {
                 Button {
                     dismiss()
@@ -23,7 +42,9 @@ struct MenuContentView: View {
                     Label("화면 캡처로 풀기", systemImage: "camera.viewfinder")
                         .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(CaptureButtonStyle())
                 .controlSize(.large)
+                .disabled(appState.isSolving)
 
                 Text("전역 단축키 \(appState.hotkey.display)")
                     .font(.caption)
@@ -86,47 +107,83 @@ struct MenuContentView: View {
                 }
             }
 
-            if !appState.history.isEmpty {
+            if appState.showsRecentHistory {
                 Divider()
-                Text("최근 풀이")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                ForEach(Array(appState.history.prefix(5))) { item in
-                    Button {
-                        dismiss()
-                        appState.showFromHistory(item)
-                    } label: {
-                        HStack {
-                            Text(item.answer ?? "…")
-                                .lineLimit(1)
-                            Spacer()
-                            Text(item.date, style: .time)
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle())
+                Button {
+                    historyExpanded.toggle()
+                } label: {
+                    HStack {
+                        Label("최근 풀이", systemImage: historyExpanded ? "chevron.down" : "chevron.right")
+                        Spacer()
+                        Text("\(appState.recentHistory.count)개").monospacedDigit()
                     }
-                    .buttonStyle(.plain)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(historyExpanded ? "펼쳐짐" : "접힘")
+                if historyExpanded {
+                    HistoryListView(
+                        items: appState.recentHistory,
+                        showsExplanation: appState.historyShowsExplanation,
+                        showsThumbnail: false,
+                        isBusy: appState.isSolving
+                    ) { item in
+                        if appState.showFromHistory(item, presentPanel: false, dismissPanel: !keepsResultPanelVisible) {
+                            showsDetail = true
+                        }
+                    }
+                    .frame(
+                        height: appState.recentHistory.isEmpty
+                            ? 110
+                            : min(
+                                CGFloat(appState.recentHistory.count) * (appState.historyShowsExplanation ? 108 : 76),
+                                270)
+                    )
+                    if appState.history.count > appState.recentHistory.count {
+                        Text("전체 \(appState.history.count)개는 설정의 풀이 기록 탭에서 볼 수 있습니다.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
-
             Divider()
             HStack {
-                SettingsLink {
-                    Text("설정…")
-                }
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        NSApp.activate(ignoringOtherApps: true)
-                    })
+                SettingsLink { Text("설정…") }
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            dismiss()
+                            NSApp.activate(ignoringOtherApps: true)
+                        }
+                    )
                 Spacer()
-                Button("종료") {
-                    NSApp.terminate(nil)
-                }
+                Button("종료") { NSApp.terminate(nil) }
             }
             .buttonStyle(.plain)
             .font(.callout)
         }
-        .padding(12)
-        .frame(width: 280)
+        .padding(16)
+        .frame(width: 360)
+        .paxoSurface()
+    }
+
+}
+
+private struct CaptureButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .padding(.vertical, 8)
+            .foregroundStyle(.primary)
+            .background(
+                .primary.opacity(configuration.isPressed ? 0.2 : isHovered ? 0.16 : 0.1),
+                in: Capsule()
+            )
+            .opacity(isEnabled ? 1 : 0.45)
+            .onHover { isHovered = $0 }
     }
 }

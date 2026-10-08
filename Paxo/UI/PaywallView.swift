@@ -105,6 +105,7 @@ struct PaywallView: View {
         }
         .padding(24)
         .frame(width: 340)
+        .paxoSurface(cornerRadius: 0)
     }
 
     private func periodLabel(_ product: Product) -> String {
