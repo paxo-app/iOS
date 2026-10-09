@@ -38,6 +38,7 @@ struct ResultView: View {
             .id(appState.current?.id)
         }
         .frame(minWidth: 340, minHeight: 200)
+        .disclosureGroupStyle(ResultDisclosureGroupStyle())
         .paxoSurface()
         .onAppear { showsSavedExplanation = appState.historyShowsExplanation }
         .onChange(of: appState.historyShowsExplanation) {
@@ -127,8 +128,6 @@ struct ResultView: View {
                             .padding(.top, 8)
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
         }
     }
@@ -195,8 +194,6 @@ struct ResultView: View {
                         .padding(.top, 8)
                 } label: {
                     Text("저장된 해설 보기")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             } else {
                 savedExplanation(explanation)
@@ -271,6 +268,32 @@ struct ResultView: View {
             Text(text)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// 화살표와 제목을 같은 버튼으로 묶어 클릭 위치에 따른 동작 차이를 없앤다.
+private struct ResultDisclosureGroupStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                configuration.isExpanded.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
+                        .accessibilityHidden(true)
+                    configuration.label
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .accessibilityValue(configuration.isExpanded ? "펼쳐짐" : "접힘")
+            if configuration.isExpanded {
+                configuration.content
+            }
         }
     }
 }
