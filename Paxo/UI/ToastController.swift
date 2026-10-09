@@ -11,18 +11,12 @@ final class ToastController {
     func show(appState: AppState, on screen: NSScreen? = nil) {
         let host = ensurePanel(appState: appState)
         // 대기 모습은 띄우는 순간에 고정한다. 대기 중 설정을 바꿔도 이미 잰 토스트 크기와 어긋나지 않게.
-        host.rootView = AnyView(
-            ToastView(waitingStyle: appState.toastWaitingStyle).environmentObject(appState).fixedSize()
-        )
+        let content = AnyView(ToastView(waitingStyle: appState.toastWaitingStyle).environmentObject(appState))
+        host.rootView = content
 
         guard let panel, let screen = screen ?? NSScreen.main else { return }
 
-        host.layoutSubtreeIfNeeded()
-        let fitting = host.fittingSize
-        let size = CGSize(
-            width: min(max(fitting.width, 120), 560),
-            height: min(max(fitting.height, 52), 260)
-        )
+        let size = Self.size(of: content)
         panel.setContentSize(size)
         panel.setFrameOrigin(appState.panelPosition.origin(for: size, on: screen, margin: 28))
 
@@ -40,7 +34,7 @@ final class ToastController {
     }
 
     /// 정답을 보여준 뒤에만 페이드로 닫는다. 취소 · 오류처럼 정답 없이 닫을 때 페이드하면
-    /// 그 사이 내용이 빈 자리("—")로 바뀌고 창도 그 크기로 줄어 작은 말풍선이 번쩍인다.
+    /// 그 사이 내용이 빈 자리("—")로 바뀌어 번쩍인다.
     func dismiss(animated: Bool = true) {
         guard let panel, isVisible else { return }
         isVisible = false
@@ -78,10 +72,26 @@ final class ToastController {
         newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         let host = NSHostingView(rootView: AnyView(EmptyView()))
+        // 창 크기는 show()만 정한다. 호스팅 뷰가 내용에 맞춰 창을 다시 줄이면
+        // 왼쪽 아래 모서리만 고정된 채 줄어서 설정한 위치에서 어긋난다.
+        host.sizingOptions = []
         newPanel.contentView = host
         panel = newPanel
         hosting = host
         return host
+    }
+
+    /// 표시용 호스팅 뷰는 크기를 재지 않으므로 따로 만든 뷰로 잰다.
+    private static func size(of content: AnyView) -> CGSize {
+        let ideal = NSHostingView(rootView: content.fixedSize()).fittingSize
+        let width = min(max(ideal.width, 120), 560)
+        var height = ideal.height
+        if ideal.width > width {
+            // 최대 폭을 넘는 정답은 줄바꿈되므로 그 폭에서 높이를 다시 잰다.
+            let wrapped = content.frame(width: width).fixedSize(horizontal: false, vertical: true)
+            height = NSHostingView(rootView: wrapped).fittingSize.height
+        }
+        return CGSize(width: width, height: min(max(height, 52), 260))
     }
 }
 
@@ -93,6 +103,8 @@ private struct ToastView: View {
         content
             .padding(.horizontal, 22)
             .padding(.vertical, 14)
+            // 말풍선이 정해진 창 크기를 채워야 창 위치와 말풍선 위치가 같다.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .paxoSurface(cornerRadius: 16)
     }
 
