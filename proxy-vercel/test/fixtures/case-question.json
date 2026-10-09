@@ -1,0 +1,20 @@
+{
+  "answer": {
+    "questionType": "multipleChoice",
+    "choices": [1, 2, 3, 4],
+    "selectedChoices": [3],
+    "answer": ""
+  },
+  "explanation": {
+    "questionType": "multipleChoice",
+    "choices": [1, 2, 3, 4],
+    "selectedChoices": [3],
+    "coreExplanation": "CASE는 소프트웨어 개발과 유지보수 과정을 자동화하고 지원하는 도구입니다. 사용자에게 사용 방법을 숙지시키는 것은 CASE의 주된 목적이 아니므로, 틀린 설명을 고르는 이 문제의 정답은 ③입니다.",
+    "wrongChoiceReasons": [
+      {"choice": 1, "reason": "모듈의 재사용성을 높이는 것은 CASE의 장점입니다. 올바른 설명이므로 틀린 것을 묻는 문제의 정답이 아닙니다."},
+      {"choice": 2, "reason": "자동화된 기법은 개발 과정의 일관성과 품질 향상에 도움을 줍니다. 올바른 설명이므로 선택하지 않습니다."},
+      {"choice": 4, "reason": "개발 정보와 문서를 관리해 유지보수를 지원합니다. CASE에 대한 올바른 설명이므로 선택하지 않습니다."}
+    ],
+    "recommendedLearning": "CASE의 목적을 개발 생산성, 품질, 재사용성, 유지보수 관점에서 정리하고 사용자 교육과 구분해 보세요."
+  }
+}

@@ -38,6 +38,8 @@
 - 인증 엔드포인트: `POST /session/challenge`, `POST /session`, `POST /session/refresh`
 - 생성 엔드포인트: `POST /generate`
 - 생성 필수 헤더: `Authorization: Bearer <session>`, `x-paxo-token`
+- 구조화 생성: `x-paxo-response-format: structured-v1`. 해설에는 선택지 검증용 `x-paxo-answer-context` JSON 헤더를 추가한다. 앱과 프록시가 같은 응답 규격을 검증하며 표시용 Markdown 제목은 앱이 만든다.
+- 생성 완료 검증: `STOP` 및 응답 형식을 검증한 뒤 성공으로 확정한다. 잘림·형식 오류에는 같은 서버 예약 안에서 한 번만 재생성하고, 최종 실패에는 정답 사용량을 차감하지 않는다.
 - 생성 본문: `kind`, `solveId`, 텍스트 파트 1개, 이미지 파트 1개만 허용한다. 그 밖의 필드는 400으로 거절한다.
 - 변경 규칙: API 스펙 변경 시 Paxo/AI/GeminiService.swift(클라이언트)와 proxy-vercel/api/generate.js(서버)를 반드시 동일한 PR에서 수정한다. 배포는 프록시 서버가 선행되어야 한다.
 
@@ -47,7 +49,7 @@
 | 데이터 | 저장 위치 및 방식 |
 | --- | --- |
 | 설정 · 단축키 | UserDefaults |
-| 최근 풀이 기록 | 앱 컨테이너 내 `Paxo/history.json` (최대 100개, 날짜·정답·해설·자가 채점·이미지 파일명) |
+| 최근 풀이 기록 | 앱 컨테이너 내 `Paxo/history.json` (최대 100개, 날짜·정답·해설·자가 채점·이미지 파일명·선택적 문제 유형 및 선택지 번호) |
 | 캡처 이미지 | 정답 호출에 성공한 이미지는 `Paxo/HistoryImages/<UUID>.jpg`에 저장한다. 메모리 캐시는 최대 8장이고, 보관 기록에서 빠진 이미지는 정리한다. |
 | 로그인 유지 정보 | Mac Keychain의 불투명 갱신 토큰. 서버의 Apple 토큰은 AES-256-GCM 암호화 |
 | 세션 · 사용량 · 풀이 상태 | Upstash Redis. Production/Preview 접두사 분리, TTL 적용 |

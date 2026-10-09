@@ -46,6 +46,12 @@ x-paxo-token:  <공유 시크릿(Shared Secret)>
 
 ### 응답 (Response)
 
+* 새 앱은 `x-paxo-response-format: structured-v1` 헤더로 구조화 생성을 요청한다. 헤더가 없는 구버전 요청에는 기존 텍스트 형식을 유지한다.
+* 구조화 해설에는 `x-paxo-answer-context` 헤더로 `{ questionType, choices, selectedChoices }` JSON을 전달할 수 있다. 정답 단계의 선택지와 해설의 선택지를 대조하며, 이 헤더는 구조화 해설 요청에서만 허용한다.
+* 구조화 정답은 `{ questionType, choices, selectedChoices, answer }`, 해설은 `{ questionType, choices, selectedChoices, coreExplanation, wrongChoiceReasons, recommendedLearning }` JSON을 Gemini 응답의 text에 담는다. 객관식 answer는 빈 문자열이며 앱이 selectedChoices를 번호로 표시한다.
+* 서버는 JSON 스키마와 `thinkingLevel: low`, 정답 2,048·해설 4,096토큰 한도를 적용한다. 잘림이나 형식 오류에는 동일 예약 안에서 한 번만 한도를 두 배로 늘려 재생성한다. 전체 업스트림 시간 한도는 45초다.
+* `finishReason: STOP`과 비어 있지 않은 최종 텍스트를 확인한 뒤에만 정답 사용량 또는 해설 완료를 확정한다. 구조화 응답은 유형·선택 번호·필수 해설·모든 비정답 선택지의 이유까지 검증한다.
+* 재생성 후에도 잘리면 502 `incomplete_response`, 형식 검증이 실패하면 502 `invalid_response`로 반환하고 예약을 해제한다. 정답은 차감하지 않고, 해설 실패에는 추가 차감이 없다.
 * 성공 응답은 `x-paxo-tier`, `x-paxo-remaining`, `x-paxo-reset-at` 헤더를 포함한다.
 * Gemini 오류는 502, 타임아웃은 504로 정규화하며 원문 오류는 노출하지 않는다.
 * Redis나 Apple 상태 확인 실패는 503으로 fail-closed 한다.

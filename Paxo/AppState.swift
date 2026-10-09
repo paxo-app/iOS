@@ -596,6 +596,7 @@ final class AppState: ObservableObject {
             guard requestGate.isCurrent(requestID) else { return }
             waitingSince = nil
             current?.answer = generated.text
+            current?.answerContext = generated.answerContext
             if let id = current?.id {
                 current?.imageFileName = historyStore.saveImage(capture.data, for: id)
             }
@@ -686,6 +687,7 @@ final class AppState: ObservableObject {
             let generated = try await requestExplanation(
                 imageData: image,
                 answer: answer,
+                context: current.answerContext,
                 preset: current.preset,
                 solveID: solveID
             )
@@ -790,6 +792,7 @@ final class AppState: ObservableObject {
     private func requestExplanation(
         imageData: Data,
         answer: String,
+        context: AnswerContext?,
         preset: SubjectPreset,
         solveID: UUID
     ) async throws -> GenerationResult {
@@ -801,7 +804,8 @@ final class AppState: ObservableObject {
                 answer: answer,
                 preset: preset,
                 sessionToken: "development-direct-call",
-                solveID: solveID
+                solveID: solveID,
+                answerContext: context
             )
         }
         #endif
@@ -811,7 +815,8 @@ final class AppState: ObservableObject {
                 answer: answer,
                 preset: preset,
                 sessionToken: session.sessionToken,
-                solveID: solveID
+                solveID: solveID,
+                answerContext: context
             )
         }
     }

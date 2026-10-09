@@ -159,6 +159,7 @@ struct SolveResult: Identifiable, Codable, Equatable {
     var date = Date()
     var preset: SubjectPreset
     var answer: String?
+    var answerContext: AnswerContext?
     var explanation: String?
     var imageFileName: String?
     var correctness: SolveCorrectness?
