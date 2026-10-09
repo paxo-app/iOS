@@ -166,6 +166,9 @@ final class AppState: ObservableObject {
     private var imageCacheOrder: [UUID] = []
     private let requestGate = SolveRequestGate()
     private var activeTask: Task<Void, Never>?
+    /// 해설 요청이 날아가 있는 풀이와 그 시작 시각. 서버는 같은 해설을 두 번 만들지 않으므로
+    /// 기다리기를 취소한 뒤 "해설 보기"를 누르면 새로 요청하지 않고 이 요청을 이어서 기다린다.
+    private var pendingExplanationStarts: [UUID: Date] = [:]
     private static let imageCacheLimit = 8
     /// 마지막으로 캡처한 화면 — 결과 패널/토스트를 같은 화면에 띄우기 위함
     private var lastCaptureScreen: NSScreen?
@@ -349,6 +352,11 @@ final class AppState: ObservableObject {
     }
 
     func requestExplanation() {
+        if let current, let startedAt = pendingExplanationStarts[current.id] {
+            waitingSince = startedAt
+            phase = .solvingExplanation
+            return
+        }
         // 이미 날아가는 요청이 있으면 연타를 무시한다
         guard !requestGate.isActive else { return }
         let requestID = requestGate.begin()
@@ -358,19 +366,22 @@ final class AppState: ObservableObject {
     /// 대기 중인 요청을 취소한다.
     /// 정답 대기 중이면 풀이 자체를 접고 늦게 온 응답은 버린다.
     /// 무료 횟수는 서버가 세므로, 서버가 이미 받은 요청을 끝까지 처리하면 차감될 수 있다.
-    /// 해설 대기 중이면 정답은 남긴다.
+    /// 해설 대기 중이면 요청은 끊지 않고 기다리기만 멈춘다. 서버는 해설을 끝까지 만들고 다시 만들어주지 않으므로,
+    /// 도착한 해설은 그 기록에 남긴다.
     func cancelSolve() {
-        guard requestGate.isActive else { return }
-        requestGate.invalidate()
-        activeTask?.cancel()
-        activeTask = nil
-        waitingSince = nil
         switch phase {
         case .solvingAnswer:
+            guard requestGate.isActive else { return }
+            requestGate.invalidate()
+            activeTask?.cancel()
+            activeTask = nil
+            waitingSince = nil
             phase = .idle
             resultPanel.hide()
             toast.dismiss(animated: false)
         case .solvingExplanation:
+            requestGate.invalidate()
+            waitingSince = nil
             phase = .answerReady
         default:
             break
@@ -662,29 +673,48 @@ final class AppState: ObservableObject {
             requestGate.finish(requestID)
             return
         }
-        waitingSince = Date()
+        let solveID = current.id
+        let startedAt = Date()
+        pendingExplanationStarts[solveID] = startedAt
+        waitingSince = startedAt
         phase = .solvingExplanation
         do {
             let generated = try await requestExplanation(
                 imageData: image,
                 answer: answer,
                 preset: current.preset,
-                solveID: current.id
+                solveID: solveID
             )
+            pendingExplanationStarts[solveID] = nil
+            requestGate.finish(requestID)
             apply(generated)
-            guard requestGate.isCurrent(requestID) else { return }
-            requestGate.finish(requestID)
-            waitingSince = nil
-            guard self.current?.id == current.id else { return }
-            self.current?.explanation = generated.text
-            phase = .done
-            upsertHistory()
+            saveExplanation(generated.text, for: solveID)
         } catch {
-            guard requestGate.isCurrent(requestID) else { return }
+            pendingExplanationStarts[solveID] = nil
             requestGate.finish(requestID)
+            // 기다리기를 취소했다면 실패를 띄우지 않는다. "해설 보기"로 새로 요청할 수 있다
+            guard self.current?.id == solveID, phase == .solvingExplanation else { return }
             waitingSince = nil
             phase = error is CancellationError ? .answerReady : .failedExplanation(errorMessage(from: error))
         }
+    }
+
+    /// 해설을 그 풀이 기록에 남긴다. 지금 보고 있는 풀이면 화면에도 바로 보인다.
+    private func saveExplanation(_ text: String, for solveID: UUID) {
+        guard current?.id == solveID else {
+            guard let index = history.firstIndex(where: { $0.id == solveID }) else { return }
+            history[index].explanation = text
+            historyStore.save(history)
+            return
+        }
+        current?.explanation = text
+        if phase == .solvingExplanation {
+            waitingSince = nil
+        }
+        if phase == .solvingExplanation || phase == .answerReady {
+            phase = .done
+        }
+        upsertHistory()
     }
 
     private func cacheImage(_ data: Data, for id: UUID) {
