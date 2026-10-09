@@ -75,6 +75,9 @@ final class AppState: ObservableObject {
     @Published var resultDisplayMode: ResultDisplayMode {
         didSet { UserDefaults.standard.set(resultDisplayMode.rawValue, forKey: "resultDisplayMode") }
     }
+    @Published var resultFontSize: ResultFontSize {
+        didSet { UserDefaults.standard.set(resultFontSize.rawValue, forKey: "resultFontSize") }
+    }
     /// 토스트 표시 시간(초)
     @Published var toastDuration: Double {
         didSet { UserDefaults.standard.set(toastDuration, forKey: "toastDuration") }
@@ -187,6 +190,7 @@ final class AppState: ObservableObject {
             PanelPosition(rawValue: UserDefaults.standard.string(forKey: "panelPosition") ?? "") ?? .topRight
         resultDisplayMode =
             ResultDisplayMode(rawValue: UserDefaults.standard.string(forKey: "resultDisplayMode") ?? "") ?? .panel
+        resultFontSize = ResultFontSize.restored(from: UserDefaults.standard.string(forKey: "resultFontSize"))
         toastDuration = UserDefaults.standard.object(forKey: "toastDuration") as? Double ?? 4.0
         toastWaitingStyle = ToastWaitingStyle.restored(from: UserDefaults.standard.string(forKey: "toastWaitingStyle"))
         if let data = UserDefaults.standard.data(forKey: "hotkeySpec"),
@@ -592,6 +596,7 @@ final class AppState: ObservableObject {
             guard requestGate.isCurrent(requestID) else { return }
             waitingSince = nil
             current?.answer = generated.text
+            current?.answerContext = generated.answerContext
             if let id = current?.id {
                 current?.imageFileName = historyStore.saveImage(capture.data, for: id)
             }
@@ -682,6 +687,7 @@ final class AppState: ObservableObject {
             let generated = try await requestExplanation(
                 imageData: image,
                 answer: answer,
+                context: current.answerContext,
                 preset: current.preset,
                 solveID: solveID
             )
@@ -786,6 +792,7 @@ final class AppState: ObservableObject {
     private func requestExplanation(
         imageData: Data,
         answer: String,
+        context: AnswerContext?,
         preset: SubjectPreset,
         solveID: UUID
     ) async throws -> GenerationResult {
@@ -797,7 +804,8 @@ final class AppState: ObservableObject {
                 answer: answer,
                 preset: preset,
                 sessionToken: "development-direct-call",
-                solveID: solveID
+                solveID: solveID,
+                answerContext: context
             )
         }
         #endif
@@ -807,7 +815,8 @@ final class AppState: ObservableObject {
                 answer: answer,
                 preset: preset,
                 sessionToken: session.sessionToken,
-                solveID: solveID
+                solveID: solveID,
+                answerContext: context
             )
         }
     }

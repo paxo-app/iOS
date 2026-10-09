@@ -1,4 +1,44 @@
 import AppKit
+import SwiftUI
+
+/// 기록마다 크기를 저장하지 않고 현재 읽기 설정을 모든 결과에 적용한다.
+enum ResultFontSize: String, CaseIterable, Codable, Identifiable {
+    case small
+    case medium
+    case large
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .small: return "작은"
+        case .medium: return "기본"
+        case .large: return "큰"
+        }
+    }
+
+    var bodySize: CGFloat {
+        switch self {
+        case .small: return 13
+        case .medium: return 15
+        case .large: return 18
+        }
+    }
+
+    var bodyFont: Font { .system(size: bodySize) }
+    var titleFont: Font { .system(size: bodySize + 3, weight: .semibold) }
+    var answerFont: Font { .system(size: bodySize + 9, weight: .bold) }
+    var codeFont: Font { .system(size: bodySize - 1, design: .monospaced) }
+    var lineSpacing: CGFloat { bodySize * 0.3 }
+
+    func headingFont(level: Int) -> Font {
+        .system(size: bodySize + CGFloat(max(1, 7 - level * 2)), weight: .semibold)
+    }
+
+    static func restored(from rawValue: String?) -> ResultFontSize {
+        rawValue.flatMap(ResultFontSize.init(rawValue:)) ?? .medium
+    }
+}
 
 /// 과목별 풀이 안내와 프롬프트 선택을 하나의 설정값으로 유지한다.
 enum SubjectPreset: String, CaseIterable, Codable, Identifiable {
@@ -119,6 +159,7 @@ struct SolveResult: Identifiable, Codable, Equatable {
     var date = Date()
     var preset: SubjectPreset
     var answer: String?
+    var answerContext: AnswerContext?
     var explanation: String?
     var imageFileName: String?
     var correctness: SolveCorrectness?

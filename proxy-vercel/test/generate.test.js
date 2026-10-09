@@ -18,7 +18,7 @@ function setup({ fetcher, tier = "free" } = {}) {
       fetcher ||
       (async (url, options) => {
         calls.push({ options, url });
-        return { status: 200, text: async () => '{"candidates":[]}' };
+        return { status: 200, text: async () => JSON.stringify({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "③" }] } }] }) };
       }),
     storeFactory: () => store,
   });
@@ -47,7 +47,7 @@ test("정답 성공 후 사용량과 헤더를 서버 기준으로 갱신한다"
   assert.equal(calls.length, 1);
   assert.equal(await store.getUsage("subject-1", "2026-09-22"), 1);
   const upstreamBody = JSON.parse(calls[0].options.body);
-  assert.equal(upstreamBody.generationConfig.maxOutputTokens, 256);
+  assert.equal(upstreamBody.generationConfig.maxOutputTokens, 2048);
 });
 
 test("무료 4번째와 Pro 101번째 요청은 Gemini 전에 차단한다", async () => {
@@ -147,10 +147,10 @@ test("subject 버스트 제한과 Redis 장애는 Gemini 전에 차단한다", a
 });
 
 test("본문 형식, MIME, base64, 메타데이터를 엄격히 검증한다", () => {
-  assert.equal(buildUpstreamBody(generateBody()).upstream.generationConfig.maxOutputTokens, 256);
+  assert.equal(buildUpstreamBody(generateBody()).upstream.generationConfig.maxOutputTokens, 2048);
   assert.equal(
     buildUpstreamBody(generateBody("explanation")).upstream.generationConfig.maxOutputTokens,
-    1024
+    4096
   );
   assert.throws(() => buildUpstreamBody({ ...generateBody(), extra: true }));
   const badMime = generateBody();

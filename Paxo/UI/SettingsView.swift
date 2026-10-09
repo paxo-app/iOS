@@ -67,6 +67,16 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+                Picker("결과 글자 크기", selection: $appState.resultFontSize) {
+                    ForEach(ResultFontSize.allCases) { size in
+                        Text(size.displayName).tag(size)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("결과 창과 풀이 기록의 상세 화면에 적용됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Picker("표시 위치", selection: $appState.panelPosition) {
                     ForEach(PanelPosition.allCases) { position in
                         Text(position.displayName).tag(position)
