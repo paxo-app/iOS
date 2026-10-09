@@ -31,7 +31,8 @@ struct ResultView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     content
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: 680, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(16)
             }
             .id(appState.current?.id)
@@ -99,17 +100,20 @@ struct ResultView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("정답")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(appState.resultFontSize.titleFont)
                         Spacer()
                         if let answer = result.answer {
                             copyButton(text: answer, field: "answer")
                         }
                     }
                     Text(result.answer ?? "—")
-                        .font(.title2.bold())
+                        .font(appState.resultFontSize.answerFont)
+                        .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(PaxoStyle.brand.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
 
                 correctnessSection(result)
 
@@ -225,19 +229,15 @@ struct ResultView: View {
     }
 
     private func savedExplanation(_ explanation: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("해설")
-                    .font(.caption)
+                Text("풀이")
+                    .font(appState.resultFontSize.bodyFont)
                     .foregroundStyle(.secondary)
                 Spacer()
                 copyButton(text: explanation, field: "explanation")
             }
-            MarkdownBlocksView(text: explanation)
-                .font(.callout)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            ExplanationView(text: explanation, fontSize: appState.resultFontSize)
         }
     }
 
@@ -254,6 +254,7 @@ struct ResultView: View {
                 .foregroundStyle(copiedField == field ? PaxoStyle.brand : Color.secondary)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(field == "answer" ? "정답 복사" : "해설 전체 복사")
         .help("복사")
     }
 
