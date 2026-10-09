@@ -45,3 +45,6 @@ Config/LocalSigning.xcconfig
 Config/*.p12
 Config/*.pfx
 Config/*.privatekey
+
+# scripts/measure-latency.sh 결과 (원자료는 PR에 요약만)
+latency-*.csv

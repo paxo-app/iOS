@@ -67,7 +67,7 @@ struct ResultView: View {
                     : "풀이할 영역을 드래그하세요. (Esc 취소)"
             )
         case .solvingAnswer:
-            loading("문제를 푸는 중…")
+            AnswerWaitingView()
         case .answerReady, .solvingExplanation, .done, .failedExplanation:
             // 해설만 실패한 경우에도 정답은 보존해서 보여준다
             resultBody
@@ -198,7 +198,7 @@ struct ResultView: View {
                 savedExplanation(explanation)
             }
         } else if appState.phase == .solvingExplanation {
-            loading("해설을 작성하는 중…")
+            ExplanationWaitingView()
         } else if case .failedExplanation(let message) = appState.phase {
             // 정답은 위에 그대로 있고, 해설만 재시도
             VStack(alignment: .leading, spacing: 6) {

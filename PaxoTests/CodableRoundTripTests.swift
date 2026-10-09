@@ -53,5 +53,17 @@ struct CodableRoundTripTests {
         #expect(CaptureMode.region.rawValue == "region")
         #expect(ResultDisplayMode.panel.rawValue == "panel")
         #expect(PanelPosition.topRight.rawValue == "topRight")
+        #expect(ToastWaitingStyle.detailed.rawValue == "detailed")
+        #expect(ToastWaitingStyle.simple.rawValue == "simple")
+    }
+
+    /// 설정이 없던 기존 사용자와 알 수 없는 값은 개선된 안내를 받는다.
+    @Test(arguments: [nil, "", "unknown"] as [String?])
+    func 토스트_대기_방식은_모르면_단계_안내로_돌아간다(rawValue: String?) {
+        #expect(ToastWaitingStyle.restored(from: rawValue) == .detailed)
+    }
+
+    @Test func 저장된_토스트_대기_방식을_그대로_읽는다() {
+        #expect(ToastWaitingStyle.restored(from: "simple") == .simple)
     }
 }

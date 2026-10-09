@@ -82,6 +82,20 @@ struct SettingsView: View {
                             .monospacedDigit()
                     }
                     Slider(value: $appState.toastDuration, in: 2...10, step: 1)
+
+                    Picker("기다리는 동안", selection: $appState.toastWaitingStyle) {
+                        ForEach(ToastWaitingStyle.allCases) { style in
+                            Text(style.displayName).tag(style)
+                        }
+                    }
+                    Text(
+                        (appState.toastWaitingStyle == .detailed
+                            ? "지금 무엇을 하는지 문구로 알려줍니다."
+                            : "'푸는 중…'만 보여줍니다.")
+                            + " 진행 원은 기다린 시간으로 그린 표시예요. 실제 남은 시간과는 다를 수 있어요."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
 
