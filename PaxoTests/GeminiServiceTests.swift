@@ -19,6 +19,7 @@ struct GeminiServiceTests {
         #expect(request.value(forHTTPHeaderField: "x-paxo-token") != nil)
         #expect(request.value(forHTTPHeaderField: "x-goog-api-key") == nil)
         #expect(request.value(forHTTPHeaderField: "x-paxo-device") == nil)
+        #expect(request.value(forHTTPHeaderField: "x-paxo-response-format") == "structured-v1")
     }
 
     /// 취소를 네트워크 오류로 감싸면 사용자가 누른 취소가 "네트워크 오류" 화면으로 보인다.

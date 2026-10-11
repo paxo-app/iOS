@@ -5,6 +5,15 @@ import Testing
 /// 프롬프트가 조용히 깨지면 앱은 정상 동작하는데 답만 이상해진다.
 /// 프록시는 text 파트를 8000자로 제한하므로 길이도 함께 지킨다.
 struct PromptsTests {
+    @Test func explanationUsesConditionalSections() {
+        let prompt = Prompts.explanation(preset: .general, answer: "③")
+        #expect(prompt.contains("coreExplanation"))
+        #expect(prompt.contains("wrongChoiceReasons"))
+        #expect(prompt.contains("recommendedLearning"))
+        #expect(prompt.contains("올바른 설명이어서 정답이 아님"))
+        #expect(prompt.contains("정답으로 선택하지 않은 모든 선택지"))
+    }
+
     /// `.general`의 promptHint는 의도적으로 비어 있다. Swift에서 contains("")는 false이므로
     /// 빈 힌트는 삽입 여부를 검사할 수 없다.
     @Test(arguments: SubjectPreset.allCases)

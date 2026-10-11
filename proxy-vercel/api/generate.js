@@ -1,5 +1,6 @@
 import { loadConfig, TIER_LIMITS } from "../lib/config.js";
 import { asHttpError, HttpError } from "../lib/errors.js";
+import { RESPONSE_FORMAT, answerContextHeader, generationConfiguration, validateGeneration } from "../lib/generation-contract.js";
 import { sendError, setUsageHeaders } from "../lib/http.js";
 import { createRedisStore } from "../lib/redis-store.js";
 import {
@@ -43,7 +44,12 @@ function createGenerateHandler(dependencies = {}) {
       const runtimeConfig = configLoader();
       requireAppToken(req, runtimeConfig);
       const token = bearerToken(req);
-      parsed = buildUpstreamBody(req.body);
+      const responseFormat = req.headers["x-paxo-response-format"];
+      badUnless(responseFormat === undefined || responseFormat === RESPONSE_FORMAT, "unsupported response format");
+      const structured = responseFormat === RESPONSE_FORMAT;
+      parsed = buildUpstreamBody(req.body, { structured });
+      const expected = answerContextHeader(req.headers["x-paxo-answer-context"]);
+      badUnless(expected === undefined || (structured && parsed.kind === "explanation"), "unexpected answer context");
       store = storeFactory(runtimeConfig);
       session = await store.getSession(hashToken(token));
       const now = clock();
@@ -77,25 +83,34 @@ function createGenerateHandler(dependencies = {}) {
         throw reservationError(reservation.reason);
       }
 
-      let upstream;
-      try {
-        upstream = await fetcher(`${GEMINI_BASE}/${runtimeConfig.model}:generateContent`, {
-          body: JSON.stringify(parsed.upstream),
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": runtimeConfig.geminiApiKey,
-          },
-          method: "POST",
-          signal: AbortSignal.timeout(45_000),
-        });
-      } catch (error) {
-        if (error && (error.name === "TimeoutError" || error.name === "AbortError")) throw error;
-        throw new HttpError(502, "upstream_error", "AI service unavailable");
-      }
-      const responseText = await upstream.text();
-      if (upstream.status !== 200) {
-        await releaseReservation(store, session.subject, day, parsed);
-        return sendError(res, 502, "upstream_error", "AI service unavailable");
+      let responseText;
+      const signal = AbortSignal.timeout(45_000);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let upstream;
+        parsed.upstream.generationConfig = generationConfiguration(parsed.kind, structured, attempt > 0);
+        try {
+          upstream = await fetcher(`${GEMINI_BASE}/${runtimeConfig.model}:generateContent`, {
+            body: JSON.stringify(parsed.upstream),
+            headers: {
+              "content-type": "application/json",
+              "x-goog-api-key": runtimeConfig.geminiApiKey,
+            },
+            method: "POST",
+            signal,
+          });
+        } catch (error) {
+          if (error && (error.name === "TimeoutError" || error.name === "AbortError")) throw error;
+          throw new HttpError(502, "upstream_error", "AI service unavailable");
+        }
+        responseText = await upstream.text();
+        if (upstream.status !== 200) throw new HttpError(502, "upstream_error", "AI service unavailable");
+        try {
+          validateGeneration(responseText, parsed.kind, structured, expected);
+          break;
+        } catch (error) {
+          if (attempt === 1 || !(error instanceof HttpError)
+            || !["incomplete_response", "invalid_response"].includes(error.code)) throw error;
+        }
       }
 
       let remaining;
@@ -144,7 +159,7 @@ function createGenerateHandler(dependencies = {}) {
   };
 }
 
-function buildUpstreamBody(raw) {
+function buildUpstreamBody(raw, { structured = false } = {}) {
   badUnless(raw && typeof raw === "object" && !Array.isArray(raw), "invalid body");
   const rootKeys = Object.keys(raw).sort();
   badUnless(
@@ -202,7 +217,7 @@ function buildUpstreamBody(raw) {
     solveId: raw.solveId,
     upstream: {
       contents: [{ parts: [text, image] }],
-      generationConfig: { maxOutputTokens: raw.kind === "answer" ? 256 : 1024 },
+      generationConfig: generationConfiguration(raw.kind, structured),
     },
   };
 }

@@ -1,86 +1,98 @@
 import SwiftUI
 
-/// LLM이 출력하는 가벼운 마크다운(제목, 목록, 굵게)을 블록 단위로 렌더링한다.
-/// AttributedString(markdown:)만으로는 제목/목록/문단 줄바꿈이 살지 않아 직접 블록을 나눈다.
+/// 문단의 호흡을 유지하고 너비가 긴 코드와 수식만 별도로 스크롤한다.
 struct MarkdownBlocksView: View {
-    let text: String
+    let blocks: [MarkdownDocument.Block]
+    var fontSize: ResultFontSize = .medium
+
+    init(text: String, fontSize: ResultFontSize = .medium) {
+        self.blocks = MarkdownDocument.parse(text)
+        self.fontSize = fontSize
+    }
+
+    init(blocks: [MarkdownDocument.Block], fontSize: ResultFontSize = .medium) {
+        self.blocks = blocks
+        self.fontSize = fontSize
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 view(for: block)
             }
         }
-    }
-
-    private enum Block {
-        case heading(level: Int, text: String)
-        case bullet(text: String)
-        case numbered(marker: String, text: String)
-        case paragraph(text: String)
-    }
-
-    private var blocks: [Block] {
-        text.split(separator: "\n", omittingEmptySubsequences: true).map { rawLine in
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-
-            if line.hasPrefix("#") {
-                let level = line.prefix(while: { $0 == "#" }).count
-                let content = line.drop(while: { $0 == "#" })
-                    .trimmingCharacters(in: .whitespaces)
-                return .heading(level: min(level, 3), text: content)
-            }
-            if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("• ") {
-                return .bullet(text: String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces))
-            }
-            if let (marker, rest) = numberedPrefix(line) {
-                return .numbered(marker: marker, text: rest)
-            }
-            return .paragraph(text: line)
-        }
+        .font(fontSize.bodyFont)
+        .lineSpacing(fontSize.lineSpacing)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
     }
 
     @ViewBuilder
-    private func view(for block: Block) -> some View {
+    private func view(for block: MarkdownDocument.Block) -> some View {
         switch block {
         case .heading(let level, let text):
-            Text(inline(text))
-                .font(level == 1 ? .title3.bold() : .headline)
-                .padding(.top, 2)
-        case .bullet(let text):
-            HStack(alignment: .top, spacing: 6) {
-                Text("•")
-                Text(inline(text))
-            }
-        case .numbered(let marker, let text):
-            HStack(alignment: .top, spacing: 6) {
+            prose(text)
+                .font(fontSize.headingFont(level: level))
+                .padding(.top, 4)
+                .accessibilityAddTraits(.isHeader)
+        case .listItem(let marker, let text, let indentation):
+            HStack(alignment: .top, spacing: 8) {
                 Text(marker)
-                Text(inline(text))
+                    .fixedSize()
+                prose(text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(.leading, CGFloat(min(indentation, 12)) * 4)
         case .paragraph(let text):
-            Text(inline(text))
+            prose(text)
+        case .code(let text), .formula(let text):
+            ScrollView(.horizontal) {
+                Text(verbatim: text)
+                    .font(fontSize.codeFont)
+                    .fixedSize(horizontal: true, vertical: true)
+                    .padding(12)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+            .accessibilityLabel(block.isCode ? "코드" : "수식")
+        case .divider:
+            Divider()
         }
     }
 
-    /// 한 줄 안의 **굵게**, *기울임*, `코드` 처리
-    private func inline(_ text: String) -> AttributedString {
-        (try? AttributedString(markdown: text)) ?? AttributedString(text)
+    private func prose(_ text: String) -> some View {
+        Text(MarkdownDocument.inline(text))
+            .fixedSize(horizontal: false, vertical: true)
     }
+}
 
-    /// "1." / "2)" 같은 번호 목록 접두사 감지
-    private func numberedPrefix(_ line: String) -> (String, String)? {
-        var digits = ""
-        var index = line.startIndex
-        while index < line.endIndex, line[index].isNumber {
-            digits.append(line[index])
-            index = line.index(after: index)
+private extension MarkdownDocument.Block {
+    var isCode: Bool {
+        if case .code = self { return true }
+        return false
+    }
+}
+
+/// 제목이 없는 기존 기록은 일반 해설 카드로 표시한다.
+struct ExplanationView: View {
+    let text: String
+    let fontSize: ResultFontSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(Array(MarkdownDocument.sections(from: text).enumerated()), id: \.offset) { _, section in
+                VStack(alignment: .leading, spacing: 12) {
+                    Label(section.kind.rawValue, systemImage: section.kind.symbolName)
+                        .font(fontSize.titleFont)
+                        .accessibilityAddTraits(.isHeader)
+                    MarkdownBlocksView(blocks: section.blocks, fontSize: fontSize)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+            }
         }
-        guard !digits.isEmpty, index < line.endIndex,
-            line[index] == "." || line[index] == ")"
-        else { return nil }
-        let marker = digits + String(line[index])
-        let rest = line[line.index(after: index)...].trimmingCharacters(in: .whitespaces)
-        guard !rest.isEmpty else { return nil }
-        return (marker, rest)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

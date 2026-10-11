@@ -31,12 +31,14 @@ struct ResultView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     content
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: 680, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(16)
             }
             .id(appState.current?.id)
         }
         .frame(minWidth: 340, minHeight: 200)
+        .disclosureGroupStyle(ResultDisclosureGroupStyle())
         .paxoSurface()
         .onAppear { showsSavedExplanation = appState.historyShowsExplanation }
         .onChange(of: appState.historyShowsExplanation) {
@@ -99,17 +101,20 @@ struct ResultView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("정답")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(appState.resultFontSize.titleFont)
                         Spacer()
                         if let answer = result.answer {
                             copyButton(text: answer, field: "answer")
                         }
                     }
                     Text(result.answer ?? "—")
-                        .font(.title2.bold())
+                        .font(appState.resultFontSize.answerFont)
+                        .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(PaxoStyle.brand.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
 
                 correctnessSection(result)
 
@@ -123,8 +128,6 @@ struct ResultView: View {
                             .padding(.top, 8)
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
         }
     }
@@ -191,8 +194,6 @@ struct ResultView: View {
                         .padding(.top, 8)
                 } label: {
                     Text("저장된 해설 보기")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             } else {
                 savedExplanation(explanation)
@@ -225,19 +226,15 @@ struct ResultView: View {
     }
 
     private func savedExplanation(_ explanation: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("해설")
-                    .font(.caption)
+                Text("풀이")
+                    .font(appState.resultFontSize.bodyFont)
                     .foregroundStyle(.secondary)
                 Spacer()
                 copyButton(text: explanation, field: "explanation")
             }
-            MarkdownBlocksView(text: explanation)
-                .font(.callout)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            ExplanationView(text: explanation, fontSize: appState.resultFontSize)
         }
     }
 
@@ -254,6 +251,7 @@ struct ResultView: View {
                 .foregroundStyle(copiedField == field ? PaxoStyle.brand : Color.secondary)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(field == "answer" ? "정답 복사" : "해설 전체 복사")
         .help("복사")
     }
 
@@ -270,6 +268,32 @@ struct ResultView: View {
             Text(text)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// 화살표와 제목을 같은 버튼으로 묶어 클릭 위치에 따른 동작 차이를 없앤다.
+private struct ResultDisclosureGroupStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                configuration.isExpanded.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
+                        .accessibilityHidden(true)
+                    configuration.label
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .accessibilityValue(configuration.isExpanded ? "펼쳐짐" : "접힘")
+            if configuration.isExpanded {
+                configuration.content
+            }
         }
     }
 }

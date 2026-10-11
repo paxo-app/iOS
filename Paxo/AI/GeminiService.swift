@@ -1,6 +1,7 @@
 import Foundation
 
 struct GenerationResult {
+    let answerContext: AnswerContext
     let remainingToday: Int?
     let resetAt: Date?
     let text: String
@@ -11,12 +12,13 @@ struct GeminiService {
     let apiKey: String
     let proxyURL: String
     let useDirectGemini: Bool
+    var session: URLSession = GeminiService.defaultSession
 
     #if DEBUG
     private static let model = "gemini-3.6-flash"
     #endif
 
-    private static let session: URLSession = {
+    private static let defaultSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 90
@@ -44,14 +46,16 @@ struct GeminiService {
         answer: String,
         preset: SubjectPreset,
         sessionToken: String,
-        solveID: UUID
+        solveID: UUID,
+        answerContext: AnswerContext? = nil
     ) async throws -> GenerationResult {
         try await generate(
             kind: .explanation,
-            prompt: Prompts.explanation(preset: preset, answer: answer),
+            prompt: Prompts.explanation(preset: preset, answer: answer, context: answerContext),
             imageData: imageData,
             sessionToken: sessionToken,
-            solveID: solveID
+            solveID: solveID,
+            expected: answerContext
         )
     }
 
@@ -70,6 +74,7 @@ struct GeminiService {
             throw GeminiError.badURL
         }
         var request = URLRequest(url: url)
+        request.setValue(GenerationContract.format, forHTTPHeaderField: "x-paxo-response-format")
         request.setValue("Bearer \(sessionToken)", forHTTPHeaderField: "Authorization")
         request.setValue(DefaultConfig.appToken, forHTTPHeaderField: "x-paxo-token")
         return request
@@ -94,12 +99,17 @@ struct GeminiService {
         prompt: String,
         imageData: Data,
         sessionToken: String,
-        solveID: UUID
+        solveID: UUID,
+        expected: AnswerContext? = nil
     ) async throws -> GenerationResult {
         var request = try makeRequest(sessionToken: sessionToken)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        if let expected {
+            let context = try JSONEncoder().encode(expected)
+            request.setValue(String(decoding: context, as: UTF8.self), forHTTPHeaderField: "x-paxo-answer-context")
+        }
         var body: [String: Any] = [
             "contents": [
                 [
@@ -116,58 +126,64 @@ struct GeminiService {
             ]
         ]
         #if DEBUG
-        if useDirectGemini {
-            body["generationConfig"] = ["maxOutputTokens": kind == .answer ? 256 : 1024]
-        } else {
+        let isDirect = useDirectGemini
+        let attempts = isDirect ? 2 : 1
+        #else
+        let isDirect = false
+        let attempts = 1
+        #endif
+        if !isDirect {
             body["kind"] = kind.rawValue
             body["solveId"] = solveID.uuidString.lowercased()
         }
-        #else
-        body["kind"] = kind.rawValue
-        body["solveId"] = solveID.uuidString.lowercased()
-        #endif
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await Self.session.data(for: request)
-        } catch let error as URLError {
-            throw Self.classify(error)
-        }
-
-        guard let http = response as? HTTPURLResponse else { throw GeminiError.http(-1, nil) }
-        guard http.statusCode == 200 else {
-            let code = Self.serverCode(from: data)
-            switch (http.statusCode, code) {
-            case (401, _): throw GeminiError.invalidSession
-            case (429, "daily_limit"):
-                if http.value(forHTTPHeaderField: "x-paxo-tier") == ProxyTier.pro.rawValue {
-                    throw GeminiError.proDailyLimit
+        // 프록시는 같은 예약 안에서 재생성한다. 앱이 중복 요청해 재차감하지 않는다.
+        for attempt in 0..<attempts {
+            #if DEBUG
+            if isDirect { body["generationConfig"] = GenerationContract.configuration(for: kind, retry: attempt > 0) }
+            #endif
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await session.data(for: request)
+            } catch let error as URLError {
+                throw Self.classify(error)
+            }
+            guard let http = response as? HTTPURLResponse else { throw GeminiError.http(-1, nil) }
+            guard http.statusCode == 200 else {
+                let code = Self.serverCode(from: data)
+                switch (http.statusCode, code) {
+                case (401, _): throw GeminiError.invalidSession
+                case (429, "daily_limit"):
+                    if http.value(forHTTPHeaderField: "x-paxo-tier") == ProxyTier.pro.rawValue {
+                        throw GeminiError.proDailyLimit
+                    }
+                    throw GeminiError.freeDailyLimit
+                case (429, _): throw GeminiError.rateLimited
+                case (502, "incomplete_response"): throw GeminiError.incompleteResponse
+                case (502, "invalid_response"): throw GeminiError.invalidResponse
+                case (502, _), (503, _), (504, _): throw GeminiError.serviceUnavailable
+                default: throw GeminiError.http(http.statusCode, Self.serverMessage(from: data))
                 }
-                throw GeminiError.freeDailyLimit
-            case (429, _): throw GeminiError.rateLimited
-            case (502, _), (503, _), (504, _): throw GeminiError.serviceUnavailable
-            default: throw GeminiError.http(http.statusCode, Self.serverMessage(from: data))
+            }
+            do {
+                let generated = try GenerationContract.decode(data, kind: kind, expected: expected)
+                return GenerationResult(
+                    answerContext: generated.context,
+                    remainingToday: http.value(forHTTPHeaderField: "x-paxo-remaining").flatMap(Int.init),
+                    resetAt: Self.date(from: http.value(forHTTPHeaderField: "x-paxo-reset-at")),
+                    text: generated.text,
+                    tier: http.value(forHTTPHeaderField: "x-paxo-tier").flatMap(ProxyTier.init)
+                )
+            } catch let error as GeminiError {
+                guard attempt + 1 < attempts else { throw error }
+                switch error {
+                case .incompleteResponse, .invalidResponse, .emptyResponse: continue
+                default: throw error
+                }
             }
         }
-
-        let decoded = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
-        let text =
-            decoded.candidates?
-            .first?
-            .content?
-            .parts?
-            .compactMap(\.text)
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !text.isEmpty else { throw GeminiError.emptyResponse }
-        return GenerationResult(
-            remainingToday: http.value(forHTTPHeaderField: "x-paxo-remaining").flatMap(Int.init),
-            resetAt: Self.date(from: http.value(forHTTPHeaderField: "x-paxo-reset-at")),
-            text: text,
-            tier: http.value(forHTTPHeaderField: "x-paxo-tier").flatMap(ProxyTier.init)
-        )
+        throw GeminiError.invalidResponse
     }
 
     private static func serverCode(from data: Data) -> String? {
@@ -195,18 +211,6 @@ struct GeminiService {
     }
 }
 
-private enum GenerationKind: String {
-    case answer
-    case explanation
-}
-
-private struct GenerateContentResponse: Decodable {
-    struct Candidate: Decodable { let content: Content? }
-    struct Content: Decodable { let parts: [Part]? }
-    struct Part: Decodable { let text: String? }
-    let candidates: [Candidate]?
-}
-
 private struct ErrorEnvelope: Decodable {
     struct Inner: Decodable {
         let code: String?
@@ -222,6 +226,8 @@ enum GeminiError: LocalizedError {
     case freeDailyLimit
     case http(Int, String?)
     case invalidSession
+    case incompleteResponse
+    case invalidResponse
     case missingKey
     case network(URLError)
     case proDailyLimit
@@ -239,6 +245,10 @@ enum GeminiError: LocalizedError {
         case .http(let code, let message):
             if let message, !message.isEmpty { return message }
             return "서버 오류가 발생했습니다. (HTTP \(code)) 잠시 후 다시 시도해주세요."
+        case .incompleteResponse:
+            return "AI 응답이 중간에 끊겼습니다. 다시 시도해주세요."
+        case .invalidResponse:
+            return "AI 답변의 형식이나 선택지 설명을 확인할 수 없습니다. 다시 시도해주세요."
         case .invalidSession:
             return "로그인 세션이 만료되었습니다. 다시 시도해주세요."
         case .missingKey:
