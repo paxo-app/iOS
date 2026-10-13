@@ -6,7 +6,7 @@ import { createGenerateHandler } from "../api/generate.js";
 import { generationConfiguration, validateGeneration } from "../lib/generation-contract.js";
 import { MemoryStore, appRequest, baseConfig, createResponse, generateBody } from "./helpers.js";
 
-const FIXTURE = JSON.parse(readFileSync(new URL("./fixtures/case-question.json", import.meta.url), "utf8"));
+const FIXTURE = JSON.parse(readFileSync(new URL("../../PaxoTests/case-question.json", import.meta.url), "utf8"));
 const NOW = new Date("2026-09-22T03:00:00.000Z");
 const SESSION_TOKEN = "s".repeat(43);
 const CONTEXT = { questionType: "multipleChoice", choices: [1, 2, 3, 4], selectedChoices: [3] };
