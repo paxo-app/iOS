@@ -10,6 +10,7 @@
     { "source": "/session/refresh", "destination": "/api/session-refresh" },
     { "source": "/session/logout", "destination": "/api/session-logout" },
     { "source": "/account", "destination": "/api/account" },
-    { "source": "/privacy", "destination": "/api/privacy" }
+    { "source": "/privacy", "destination": "/api/privacy" },
+    { "source": "/service", "destination": "/api/service" }
   ]
 }

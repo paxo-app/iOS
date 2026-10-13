@@ -94,6 +94,11 @@ struct PaywallView: View {
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
 
+            if let serviceURL = URL(string: DefaultConfig.serviceGuideURL) {
+                Link("서비스·구독 안내", destination: serviceURL)
+                    .font(.caption2)
+            }
+
             HStack(spacing: 12) {
                 if let privacyURL = URL(string: DefaultConfig.privacyPolicyURL) {
                     Link("개인정보 처리방침", destination: privacyURL)

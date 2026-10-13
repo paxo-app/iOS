@@ -4,8 +4,9 @@ import Testing
 /// 앱과 프록시의 회귀 테스트에서 같은 응답 사례를 사용한다.
 enum GenerationFixtures {
     static func load() throws -> [String: Any] {
-        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("proxy-vercel/test/fixtures/case-question.json")
+        let url = try #require(
+            Bundle(for: GenerationFixtureBundleMarker.self).url(
+                forResource: "case-question", withExtension: "json"))
         return try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
     }
 
@@ -25,3 +26,5 @@ enum GenerationFixtures {
         ])
     }
 }
+
+private final class GenerationFixtureBundleMarker: NSObject {}
