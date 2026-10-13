@@ -62,18 +62,19 @@ struct KeychainProxyCredentialStore: ProxyCredentialStoring {
 
 struct StoreKitProofProvider: StoreKitProofProviding {
     func proof() async -> StoreKitProof? {
-        if #available(macOS 15.0, *),
-            let result = try? await AppTransaction.shared,
-            case .verified = result
-        {
-            return StoreKitProof(jws: result.jwsRepresentation, type: .appTransaction)
-        }
+        // 구독 계정과 앱 다운로드 계정이 다를 수 있어 현재 구독 거래를 먼저 증명한다.
         for await entitlement in Transaction.currentEntitlements {
             guard case .verified(let transaction) = entitlement,
                 StoreProducts.identifiers.contains(transaction.productID),
                 transaction.revocationDate == nil
             else { continue }
             return StoreKitProof(jws: entitlement.jwsRepresentation, type: .transaction)
+        }
+        if #available(macOS 15.0, *),
+            let result = try? await AppTransaction.shared,
+            case .verified = result
+        {
+            return StoreKitProof(jws: result.jwsRepresentation, type: .appTransaction)
         }
         return nil
     }

@@ -26,6 +26,18 @@ struct StoreManagerTests {
         #expect(manager.products.isEmpty)
         #expect(manager.errorMessage?.contains("가격 정보를 불러오지 못했습니다") == true)
     }
+
+    @Test("복원 시 로컬 Pro 상태가 같아도 서버 권한을 다시 확인한다")
+    func refreshesServerAfterRestoreWhenLocalTierIsUnchanged() async {
+        let manager = StoreManager(productLoader: { [] })
+        var refreshCount = 0
+        manager.onEntitlementsChanged = { refreshCount += 1 }
+
+        await manager.refreshEntitlements()
+        await manager.refreshEntitlements(forceServerRefresh: true)
+
+        #expect(refreshCount == 1)
+    }
 }
 
 private enum ProductLoadingTestError: Error {
