@@ -88,7 +88,7 @@ final class StoreManager: ObservableObject {
         eligibleIntroOfferProductIDs.contains(product.id)
     }
 
-    func refreshEntitlements() async {
+    func refreshEntitlements(forceServerRefresh: Bool = false) async {
         let previous = isPro
         var pro = false
         for await entitlement in Transaction.currentEntitlements {
@@ -101,7 +101,7 @@ final class StoreManager: ObservableObject {
         }
         isPro = pro
         await refreshIntroOfferEligibility()
-        if hasLoadedEntitlements, previous != pro {
+        if forceServerRefresh || (hasLoadedEntitlements && previous != pro) {
             await onEntitlementsChanged?()
         }
         hasLoadedEntitlements = true
@@ -144,7 +144,7 @@ final class StoreManager: ObservableObject {
         } catch {
             errorMessage = "복원에 실패했습니다: \(error.localizedDescription)"
         }
-        await refreshEntitlements()
+        await refreshEntitlements(forceServerRefresh: true)
     }
 
     private func refreshIntroOfferEligibility() async {
