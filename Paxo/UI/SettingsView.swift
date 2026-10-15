@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// 앱 설정과 날짜별 풀이 탐색을 하나의 설정 창에서 제공한다.
@@ -5,7 +6,6 @@ struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var store: StoreManager
     @State private var recentHistoryLimitText = ""
-    @FocusState private var isEditingHistoryLimit: Bool
 
     var body: some View {
         TabView {
@@ -13,11 +13,8 @@ struct SettingsView: View {
             HistoryArchiveView().tabItem { Label("풀이 기록", systemImage: "clock.arrow.circlepath") }
         }
         .frame(width: 460, height: 660)
-        .paxoSurface(cornerRadius: 0)
+        .paxoWindowSurface()
         .onAppear { recentHistoryLimitText = String(appState.recentHistoryLimit) }
-        .onChange(of: isEditingHistoryLimit) {
-            if !isEditingHistoryLimit { saveRecentHistoryLimit() }
-        }
         .onChange(of: appState.recentHistoryLimit) {
             recentHistoryLimitText = String(appState.recentHistoryLimit)
         }
@@ -135,15 +132,9 @@ struct SettingsView: View {
                     Text("해설과 함께 표시").tag(true)
                 }
                 LabeledContent("메뉴에 표시할 풀이 수") {
-                    TextField("", text: $recentHistoryLimitText)
-                        .labelsHidden()
-                        .textFieldStyle(.roundedBorder)
-                        .multilineTextAlignment(.trailing)
+                    HistoryLimitField(text: $recentHistoryLimitText, onCommit: saveRecentHistoryLimit)
                         .frame(width: 60)
-                        .focused($isEditingHistoryLimit)
-                        .onSubmit { saveRecentHistoryLimit() }
                         .onDisappear { saveRecentHistoryLimit() }
-                        .accessibilityLabel("메뉴에 표시할 풀이 수")
                 }
                 .disabled(!appState.showsRecentHistory)
                 Text("메뉴에는 최신 풀이를 설정한 개수만큼 표시합니다. 이전 풀이는 풀이 기록 탭에서 볼 수 있습니다. 정답만 표시해도 저장된 해설은 기록을 열어 볼 수 있습니다.")
@@ -274,5 +265,87 @@ struct SettingsView: View {
             appState.recentHistoryLimit = min(max(count, 1), 100)
         }
         recentHistoryLimitText = String(appState.recentHistoryLimit)
+    }
+}
+
+/// AppKit의 편집 검증을 사용해 문자 입력과 붙여넣기를 같은 기준으로 차단한다.
+private struct HistoryLimitField: NSViewRepresentable {
+    @Binding var text: String
+    @Environment(\.isEnabled) private var isEnabled
+    let onCommit: () -> Void
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField(string: text)
+        field.formatter = HistoryLimitFormatter()
+        field.delegate = context.coordinator
+        field.bezelStyle = .roundedBezel
+        field.alignment = .right
+        field.font = .systemFont(ofSize: NSFont.systemFontSize)
+        field.setAccessibilityLabel("메뉴에 표시할 풀이 수")
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        field.isEnabled = isEnabled
+        if field.stringValue != text { field.stringValue = text }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: HistoryLimitField
+
+        init(parent: HistoryLimitField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            parent.onCommit()
+        }
+
+        func control(
+            _ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector
+        ) -> Bool {
+            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
+            parent.onCommit()
+            return true
+        }
+    }
+}
+
+/// 저장 시점까지 잘못된 문자가 남지 않도록 편집 중에도 숫자만 허용한다.
+private final class HistoryLimitFormatter: Formatter {
+    override func string(for object: Any?) -> String? {
+        object as? String
+    }
+
+    override func getObjectValue(
+        _ object: AutoreleasingUnsafeMutablePointer<AnyObject?>?,
+        for string: String,
+        errorDescription error: AutoreleasingUnsafeMutablePointer<NSString?>?
+    ) -> Bool {
+        guard isValid(string) else { return false }
+        object?.pointee = string as NSString
+        return true
+    }
+
+    override func isPartialStringValid(
+        _ partialString: String,
+        newEditingString newString: AutoreleasingUnsafeMutablePointer<NSString?>?,
+        errorDescription error: AutoreleasingUnsafeMutablePointer<NSString?>?
+    ) -> Bool {
+        isValid(partialString)
+    }
+
+    private func isValid(_ string: String) -> Bool {
+        string.utf8.allSatisfy { (48...57).contains($0) }
     }
 }
