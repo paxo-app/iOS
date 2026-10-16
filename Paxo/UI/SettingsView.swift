@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var store: StoreManager
     @State private var recentHistoryLimitText = ""
+    @State private var selectedResultFontSize: ResultFontSize = .medium
 
     var body: some View {
         TabView {
@@ -14,9 +15,26 @@ struct SettingsView: View {
         }
         .frame(width: 460, height: 660)
         .paxoWindowSurface()
-        .onAppear { recentHistoryLimitText = String(appState.recentHistoryLimit) }
+        .onAppear {
+            recentHistoryLimitText = String(appState.recentHistoryLimit)
+            selectedResultFontSize = appState.resultFontSize
+        }
         .onChange(of: appState.recentHistoryLimit) {
             recentHistoryLimitText = String(appState.recentHistoryLimit)
+        }
+        .onChange(of: appState.resultFontSize) {
+            if selectedResultFontSize != appState.resultFontSize {
+                selectedResultFontSize = appState.resultFontSize
+            }
+        }
+        .onChange(of: selectedResultFontSize) {
+            let selection = selectedResultFontSize
+            // Picker 갱신 중 ObservableObject를 발행하지 않도록 다음 실행 주기에 반영한다.
+            DispatchQueue.main.async {
+                if selectedResultFontSize == selection, appState.resultFontSize != selection {
+                    appState.resultFontSize = selection
+                }
+            }
         }
     }
 
@@ -64,7 +82,7 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                Picker("결과 글자 크기", selection: $appState.resultFontSize) {
+                Picker("결과 글자 크기", selection: $selectedResultFontSize) {
                     ForEach(ResultFontSize.allCases) { size in
                         Text(size.displayName).tag(size)
                     }
