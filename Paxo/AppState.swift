@@ -600,8 +600,7 @@ final class AppState: ObservableObject {
     }
 
     private func enforceHistoryAccess() {
-        guard let id = activeHistoryResultID,
-            !visibleHistory.contains(where: { $0.id == id })
+        guard HistoryBrowser.shouldClose(activeResultID: activeHistoryResultID, items: history, tier: serverTier)
         else { return }
         activeHistoryResultID = nil
         current = nil

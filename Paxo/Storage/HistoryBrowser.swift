@@ -10,6 +10,11 @@ enum HistoryBrowser {
         Array(visible(items, tier: tier).prefix(max(requestedCount, 1)))
     }
 
+    static func shouldClose(activeResultID: UUID?, items: [SolveResult], tier: ProxyTier) -> Bool {
+        guard let activeResultID else { return false }
+        return !visible(items, tier: tier).contains { $0.id == activeResultID }
+    }
+
     static func filter(
         _ items: [SolveResult], query: String, date: Date? = nil,
         subjectName: (UUID) -> String? = { _ in nil }, calendar: Calendar = .current

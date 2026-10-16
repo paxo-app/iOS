@@ -82,6 +82,19 @@ struct SubjectHistoryTests {
         #expect(proMatches.map(\.id) == [items[11].id])
     }
 
+    @Test func downgradeClosesOnlyHistoryOutsideFreeRange() {
+        let items = (0..<12).map { offset -> SolveResult in
+            var result = SolveResult(preset: .general)
+            result.date = Date(timeIntervalSince1970: TimeInterval(12 - offset))
+            return result
+        }
+
+        #expect(!HistoryBrowser.shouldClose(activeResultID: nil, items: items, tier: .free))
+        #expect(!HistoryBrowser.shouldClose(activeResultID: items[11].id, items: items, tier: .pro))
+        #expect(HistoryBrowser.shouldClose(activeResultID: items[11].id, items: items, tier: .free))
+        #expect(!HistoryBrowser.shouldClose(activeResultID: items[0].id, items: items, tier: .free))
+    }
+
     @Test func groupingAndSubjectDeletionKeepRecordsAndImages() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
