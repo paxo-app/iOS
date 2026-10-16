@@ -21,6 +21,7 @@ Phase 3 구현 범위: GitHub Actions에서 PR diff를 Gemini로 검토하고 PR
 - 한 번에 최대 60개 파일, diff 60,000자, context 24,000자, finding 20개, PR당 성공한 모델 호출 20회로 제한한다. 제외 파일 수와 호출 수를 댓글에 표시한다.
 - AI가 반환한 finding은 실제 검토 파일의 추가된 줄만 허용한다. severity, confidence, category, classification, file, line, 원인, 영향, 조치를 검증한다.
 - API key와 원문 diff는 Actions 로그에 출력하지 않는다. 요청 실패 시 HTTP 상태만 기록한다.
+- AI 응답이 출력 토큰 한도에 닿으면 한 번만 더 큰 한도로 재시도한다. 끝까지 완성되지 않으면 응답 본문 없이 허용된 종료 이유만 로그에 기록한다.
 
 GitHub의 `pull_request_target` 보안 지침상 [PR head를 checkout하여 실행하는 것은 위험하다](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target). 이 workflow의 checkout은 기준 브랜치의 스크립트만 가져오고, PR patch는 GitHub API의 데이터로만 처리한다. Workflow나 리뷰 스크립트가 바뀌는 PR은 특히 신중히 검토한다.
 

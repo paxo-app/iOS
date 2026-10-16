@@ -16,6 +16,11 @@ import {
 const API_VERSION = "2022-11-28";
 const DEFAULT_MODEL = "gemini-3.6-flash";
 const MAX_OPEN_FINDINGS = 20;
+const OUTPUT_TOKEN_LIMITS = [8_192, 16_384];
+const FINISH_REASONS = new Set([
+  "STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "LANGUAGE", "OTHER", "BLOCKLIST",
+  "PROHIBITED_CONTENT", "SPII", "MALFORMED_FUNCTION_CALL", "IMAGE_SAFETY",
+]);
 
 const REVIEW_SCHEMA = {
   type: "object",
@@ -158,23 +163,35 @@ async function callGemini(input) {
     contents: [{ role: "user", parts: [{ text: JSON.stringify(input) }] }],
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 4096,
       responseFormat: { text: { mimeType: "APPLICATION_JSON", schema: REVIEW_SCHEMA } },
     },
   };
-  const response = await request(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify(payload),
-  }, 150_000);
-  const candidate = response.candidates?.[0];
-  if (candidate?.finishReason !== "STOP") throw new Error("AI 응답이 완성되지 않았습니다.");
-  const text = candidate.content?.parts?.map((part) => part.text ?? "").join("");
-  if (!text) throw new Error("AI 응답이 비어 있습니다.");
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error("AI 응답이 유효한 JSON이 아닙니다.");
+  return completeReview(async (maxOutputTokens) => {
+    payload.generationConfig.maxOutputTokens = maxOutputTokens;
+    return request(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify(payload),
+    }, 150_000);
+  });
+}
+
+export async function completeReview(generate) {
+  for (const [index, maxOutputTokens] of OUTPUT_TOKEN_LIMITS.entries()) {
+    const response = await generate(maxOutputTokens);
+    const candidate = response?.candidates?.[0];
+    const reason = candidate
+      ? (FINISH_REASONS.has(candidate.finishReason) ? candidate.finishReason : "UNKNOWN")
+      : "NO_CANDIDATE";
+    if (reason === "MAX_TOKENS" && index + 1 < OUTPUT_TOKEN_LIMITS.length) continue;
+    if (reason !== "STOP") throw new Error(`AI 응답이 완성되지 않았습니다 (종료 이유: ${reason}).`);
+    const text = candidate.content?.parts?.map((part) => part.text ?? "").join("");
+    if (!text) throw new Error("AI 응답이 비어 있습니다.");
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error("AI 응답이 유효한 JSON이 아닙니다.");
+    }
   }
 }
 
