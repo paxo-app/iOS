@@ -18,6 +18,9 @@ struct MenuContentView: View {
             }
         }
         .onAppear { appState.refreshFreeRemaining() }
+        .onChange(of: appState.serverTier) {
+            if appState.serverTier != .pro { showsDetail = false }
+        }
     }
 
     private var menuContent: some View {
@@ -133,10 +136,14 @@ struct MenuContentView: View {
                                 CGFloat(appState.recentHistory.count) * (appState.historyShowsExplanation ? 108 : 76),
                                 270)
                     )
-                    if appState.history.count > appState.recentHistory.count {
-                        Text("전체 \(appState.history.count)개는 설정의 풀이 기록 탭에서 볼 수 있습니다.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    if appState.visibleHistory.count > appState.recentHistory.count {
+                        Text(
+                            appState.serverTier == .pro
+                                ? "전체 \(appState.visibleHistory.count)개는 설정의 풀이 기록 탭에서 볼 수 있습니다."
+                                : "무료 플랜의 최신 \(appState.visibleHistory.count)개는 설정의 풀이 기록 탭에서 볼 수 있습니다."
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     }
                 }
             }

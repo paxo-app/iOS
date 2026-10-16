@@ -9,7 +9,7 @@ struct AnswerWaitingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let thumbnail = appState.currentThumbnail {
-                CaptureThumbnailCard(image: thumbnail, preset: appState.current?.preset ?? appState.preset)
+                CaptureThumbnailCard(image: thumbnail)
             }
             WaitingTimeline(since: appState.waitingSince, stage: WaitingStage.answerStage) { stage, elapsed in
                 WaitingStageRow(stage: stage, showsCancel: elapsed.map(WaitingStage.allowsCancel) ?? false)
@@ -228,7 +228,6 @@ private struct WaitingTimeline<Content: View>: View {
 /// "이 문제를 보고 있어요"를 눈으로 확인시켜 주는 캡처 미리보기
 private struct CaptureThumbnailCard: View {
     let image: NSImage
-    let preset: SubjectPreset
 
     var body: some View {
         HStack(spacing: 10) {
@@ -241,7 +240,7 @@ private struct CaptureThumbnailCard: View {
                 Text("캡처한 문제")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("\(preset.displayName) · 방금")
+                Text("방금")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }

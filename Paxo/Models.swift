@@ -40,7 +40,7 @@ enum ResultFontSize: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-/// 과목별 풀이 안내와 프롬프트 선택을 하나의 설정값으로 유지한다.
+/// 예전 풀이 기록을 복원하고 생성 당시의 프롬프트 구분을 유지한다.
 enum SubjectPreset: String, CaseIterable, Codable, Identifiable {
     case general
     case math

@@ -10,6 +10,7 @@ struct ResultView: View {
     @State private var editField: ResultEditField?
     @State private var editDraft = ""
     @State private var editingResultID: UUID?
+    @State private var showsSubjectPicker = false
     var onBack: (() -> Void)? = nil
     var backTitle = "최근 풀이로"
     var isHistory = false
@@ -57,6 +58,15 @@ struct ResultView: View {
         .sheet(item: $editField) { field in
             editor(for: field)
         }
+        .sheet(isPresented: $showsSubjectPicker) {
+            if let resultID = appState.current?.id {
+                SubjectPickerView(resultID: resultID)
+                    .environmentObject(appState)
+            }
+        }
+        .onChange(of: appState.serverTier) {
+            if appState.serverTier != .pro { showsSubjectPicker = false }
+        }
     }
 
     private var isSolving: Bool {
@@ -100,12 +110,24 @@ struct ResultView: View {
         if let result = appState.current {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(result.preset.displayName)
                     Spacer()
                     Text(result.date, format: .dateTime.year().month().day().hour().minute())
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                if isHistory && appState.serverTier == .pro {
+                    Button {
+                        showsSubjectPicker = true
+                    } label: {
+                        if let subject = appState.subject(for: result.id) {
+                            Label(subject.name, systemImage: "folder")
+                        } else {
+                            Label("과목 지정", systemImage: "plus.circle")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isSolving || !appState.subjectCatalogReady)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("정답")
