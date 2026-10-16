@@ -36,14 +36,14 @@ struct SettingsView: View {
                     Text(message)
                         .font(.caption)
                         .foregroundStyle(.red)
+                    AppleSignInButton()
                     Button("로그인 다시 준비") {
                         appState.retryAppleSignInPreparation()
                     }
                 case .preparing, .signingIn:
                     ProgressView("Apple 로그인을 확인하는 중…")
                 case .signedOut:
-                    Text("메뉴 막대의 Paxo 메뉴에서 Apple로 로그인해주세요.")
-                        .foregroundStyle(.secondary)
+                    AppleSignInButton()
                 }
                 Text("이름과 이메일은 요청하거나 저장하지 않습니다.")
                     .font(.caption)
