@@ -22,11 +22,16 @@ struct PaywallView: View {
                 .multilineTextAlignment(.center)
             } else {
                 Text(
-                    "무료 풀이는 하루 \(UsagePolicy.dailyFreeLimit)회예요.\nPro는 비용 보호를 위해 하루 최대 \(UsagePolicy.dailyProLimit)회 제공돼요."
+                    "무료 풀이는 하루 \(UsagePolicy.dailyFreeLimit)회, 기록 열람은 최신 10개까지예요.\nPro는 하루 최대 \(UsagePolicy.dailyProLimit)회와 기록 100개 열람, 과목 관리·과목별 보기를 제공해요."
                 )
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+
+                Text("Pro가 끝나도 이전 기록은 이 Mac에 최대 100개까지 보관됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
 
                 if store.productLoadState == .idle || store.productLoadState == .loading {
                     HStack(spacing: 8) {

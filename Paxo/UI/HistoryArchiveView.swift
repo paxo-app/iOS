@@ -5,10 +5,28 @@ struct HistoryArchiveView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showsDetail = false
     @State private var selectedDate: Date?
+    @State private var selectedSubjectKey: String?
+    @State private var grouping: HistoryGrouping = .date
+    @State private var showsSubjectManager = false
     @State private var query = ""
 
+    private var rootMatches: [SolveResult] {
+        HistoryBrowser.filter(appState.visibleHistory, query: query) { id in
+            appState.subject(for: id)?.name
+        }
+    }
+
     private var matchingItems: [SolveResult] {
-        HistoryBrowser.filter(appState.history, query: query, date: selectedDate)
+        rootMatches.filter { item in
+            if let selectedDate, !Calendar.current.isDate(item.date, inSameDayAs: selectedDate) {
+                return false
+            }
+            if let selectedSubjectKey {
+                let key = appState.subject(for: item.id)?.id.uuidString ?? "unclassified"
+                return key == selectedSubjectKey
+            }
+            return true
+        }
     }
 
     var body: some View {
@@ -19,12 +37,22 @@ struct HistoryArchiveView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     header
                     searchField
-                    Text("최근 100개의 풀이와 문제 이미지를 이 Mac에서 다시 볼 수 있습니다.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if appState.serverTier == .pro {
+                        proControls
+                    }
+                    if let subjectError = appState.subjectError, appState.serverTier == .pro {
+                        Text(subjectError).font(.caption).foregroundStyle(.red)
+                    }
+                    Text(
+                        appState.serverTier == .pro
+                            ? "최근 100개의 풀이와 문제 이미지를 이 Mac에서 다시 볼 수 있습니다."
+                            : "무료 플랜에서는 최신 10개를 볼 수 있습니다. 이전 기록은 이 Mac에 보관되며 Pro에서 다시 볼 수 있습니다."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     if matchingItems.isEmpty {
                         emptyState
-                    } else if selectedDate != nil {
+                    } else if selectedDate != nil || selectedSubjectKey != nil {
                         HistoryListView(
                             items: matchingItems,
                             showsExplanation: appState.historyShowsExplanation,
@@ -34,6 +62,8 @@ struct HistoryArchiveView: View {
                                 showsDetail = true
                             }
                         }
+                    } else if grouping == .subject && appState.serverTier == .pro {
+                        subjectList
                     } else {
                         dateList
                     }
@@ -43,15 +73,35 @@ struct HistoryArchiveView: View {
             }
         }
         .tint(PaxoStyle.brand)
+        .sheet(isPresented: $showsSubjectManager) {
+            SubjectManagementView().environmentObject(appState)
+        }
+        .onChange(of: appState.serverTier) {
+            if appState.serverTier != .pro {
+                grouping = .date
+                selectedDate = nil
+                selectedSubjectKey = nil
+                showsDetail = false
+                showsSubjectManager = false
+            }
+        }
+        .onChange(of: appState.subjectCatalog) {
+            if let selectedSubjectKey, selectedSubjectKey != "unclassified",
+                !appState.historySubjects.contains(where: { $0.id.uuidString == selectedSubjectKey })
+            {
+                self.selectedSubjectKey = nil
+            }
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if selectedDate != nil {
+            if selectedDate != nil || selectedSubjectKey != nil {
                 Button {
                     selectedDate = nil
+                    selectedSubjectKey = nil
                 } label: {
-                    Label("날짜 목록으로", systemImage: "chevron.left")
+                    Label(grouping == .date ? "날짜 목록으로" : "과목 목록으로", systemImage: "chevron.left")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -60,6 +110,14 @@ struct HistoryArchiveView: View {
                 if let selectedDate {
                     Text(selectedDate, format: .dateTime.year().month().day())
                         .font(.title2.bold())
+                } else if let selectedSubjectKey {
+                    Text(
+                        selectedSubjectKey == "unclassified"
+                            ? "미분류"
+                            : appState.historySubjects.first(where: { $0.id.uuidString == selectedSubjectKey })?.name
+                                ?? "미분류"
+                    )
+                    .font(.title2.bold())
                 } else {
                     Text("풀이 기록").font(.title2.bold())
                 }
@@ -74,7 +132,7 @@ struct HistoryArchiveView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("정답, 해설, 과목 검색", text: $query)
+            TextField(appState.serverTier == .pro ? "정답, 해설, 과목 검색" : "정답, 해설 검색", text: $query)
                 .textFieldStyle(.plain)
                 .accessibilityLabel("풀이 기록 검색")
             if !query.isEmpty {
@@ -91,10 +149,26 @@ struct HistoryArchiveView: View {
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
     }
 
+    private var proControls: some View {
+        HStack {
+            Picker("묶음", selection: $grouping) {
+                Text("날짜별").tag(HistoryGrouping.date)
+                Text("과목별").tag(HistoryGrouping.subject)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: grouping) {
+                selectedDate = nil
+                selectedSubjectKey = nil
+            }
+            Button("과목 관리") { showsSubjectManager = true }
+                .disabled(!appState.subjectCatalogReady)
+        }
+    }
+
     private var dateList: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
-                ForEach(HistoryBrowser.days(matchingItems)) { day in
+                ForEach(HistoryBrowser.days(rootMatches)) { day in
                     Button {
                         selectedDate = day.date
                     } label: {
@@ -126,6 +200,37 @@ struct HistoryArchiveView: View {
         }
     }
 
+    private var subjectList: some View {
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                ForEach(HistoryBrowser.subjects(rootMatches, catalog: appState.subjectCatalog)) { group in
+                    Button {
+                        selectedSubjectKey = group.id
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "folder")
+                                .font(.title2)
+                                .foregroundStyle(PaxoStyle.brand)
+                                .frame(width: 36)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(group.name).font(.callout.weight(.semibold))
+                                Text("풀이 \(group.items.count)개")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: query.isEmpty ? "calendar" : "magnifyingglass")
@@ -143,4 +248,9 @@ struct HistoryArchiveView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
+
+private enum HistoryGrouping: String {
+    case date
+    case subject
 }

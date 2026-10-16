@@ -23,6 +23,9 @@ final class AppState: ObservableObject {
     @Published private(set) var phase: SolvePhase = .idle
     @Published private(set) var current: SolveResult?
     @Published private(set) var history: [SolveResult] = []
+    @Published private(set) var subjectCatalog = SubjectCatalog()
+    @Published private(set) var subjectCatalogReady = false
+    @Published private(set) var subjectError: String?
     /// 지금 기다리는 요청이 시작된 시각. 대기 화면이 경과 시간으로 안내 단계를 고른다.
     @Published private(set) var waitingSince: Date?
 
@@ -58,11 +61,13 @@ final class AppState: ObservableObject {
     }
 
     var recentHistory: [SolveResult] {
-        Array(history.prefix(min(max(recentHistoryLimit, 1), 100)))
+        HistoryBrowser.recent(history, tier: serverTier, requestedCount: recentHistoryLimit)
     }
 
-    @Published var preset: SubjectPreset {
-        didSet { UserDefaults.standard.set(preset.rawValue, forKey: "preset") }
+    var historyDisplayLimit: Int { serverTier == .pro ? 100 : 10 }
+
+    var visibleHistory: [SolveResult] {
+        HistoryBrowser.visible(history, tier: serverTier)
     }
     @Published var captureMode: CaptureMode {
         didSet { UserDefaults.standard.set(captureMode.rawValue, forKey: "captureMode") }
@@ -162,11 +167,13 @@ final class AppState: ObservableObject {
     private let paywallWindow = PaywallWindowController()
     private let onboardingWindow = OnboardingWindowController()
     private let historyStore = HistoryStore()
+    private let subjectStore = SubjectStore()
     private let sessionManager = ProxySessionManager()
     /// 메모리 사용을 제한하고 오래된 문제 이미지는 필요할 때 로컬 기록에서 다시 읽는다.
     private var imageCache: [UUID: Data] = [:]
     private var thumbnailCache: [UUID: NSImage] = [:]
     private var imageCacheOrder: [UUID] = []
+    private var activeHistoryResultID: UUID?
     private let requestGate = SolveRequestGate()
     private var activeTask: Task<Void, Never>?
     /// 해설 요청이 날아가 있는 풀이와 그 시작 시각. 서버는 같은 해설을 두 번 만들지 않으므로
@@ -184,7 +191,6 @@ final class AppState: ObservableObject {
         showsRecentHistory = UserDefaults.standard.object(forKey: "showsRecentHistory") as? Bool ?? true
         historyShowsExplanation = UserDefaults.standard.object(forKey: "historyShowsExplanation") as? Bool ?? true
         recentHistoryLimit = min(max(UserDefaults.standard.object(forKey: "recentHistoryLimit") as? Int ?? 5, 1), 100)
-        preset = SubjectPreset(rawValue: UserDefaults.standard.string(forKey: "preset") ?? "") ?? .general
         captureMode = CaptureMode(rawValue: UserDefaults.standard.string(forKey: "captureMode") ?? "") ?? .region
         panelPosition =
             PanelPosition(rawValue: UserDefaults.standard.string(forKey: "panelPosition") ?? "") ?? .topRight
@@ -211,6 +217,12 @@ final class AppState: ObservableObject {
 
     func start() {
         history = historyStore.load()
+        do {
+            subjectCatalog = try subjectStore.load(migrating: history)
+            subjectCatalogReady = true
+        } catch {
+            subjectError = "과목 정보를 불러오지 못했습니다. 앱을 다시 실행해주세요."
+        }
         #if DEBUG
         sessionManager.developmentProxyURL = proxyURL
         #endif
@@ -320,7 +332,7 @@ final class AppState: ObservableObject {
     /// 패널 안의 홈에서 기록을 열 때는 현재 창을 닫지 않고 상세 화면으로 전환한다.
     @discardableResult
     func showFromHistory(_ item: SolveResult, presentPanel: Bool = true, dismissPanel: Bool = true) -> Bool {
-        guard !isSolving else { return false }
+        guard !isSolving, visibleHistory.contains(where: { $0.id == item.id }) else { return false }
         toastDismissTask?.cancel()
         // 페이드하는 동안 토스트 내용이 방금 연 기록의 답으로 바뀌어 보이지 않게 바로 닫는다
         toast.dismiss(animated: false)
@@ -328,6 +340,7 @@ final class AppState: ObservableObject {
             cacheImage(image, for: item.id)
         }
         current = item
+        activeHistoryResultID = item.id
         phase = item.explanation == nil ? .answerReady : .done
         if presentPanel {
             resultPanel.show(appState: self, on: Self.screenUnderMouse())
@@ -347,6 +360,53 @@ final class AppState: ObservableObject {
     func historyImage(for item: SolveResult) -> NSImage? {
         guard let data = imageCache[item.id] ?? historyStore.loadImage(for: item) else { return nil }
         return NSImage(data: data)
+    }
+
+    var historySubjects: [HistorySubject] {
+        serverTier == .pro && subjectCatalogReady ? subjectCatalog.subjects : []
+    }
+
+    func subject(for resultID: UUID) -> HistorySubject? {
+        guard serverTier == .pro, subjectCatalogReady else { return nil }
+        return subjectCatalog.subject(for: resultID)
+    }
+
+    @discardableResult
+    func createSubject(_ name: String) -> Bool {
+        updateSubjects { try $0.create(name) }
+    }
+
+    @discardableResult
+    func renameSubject(_ id: UUID, to name: String) -> Bool {
+        updateSubjects { try $0.rename(id, to: name) }
+    }
+
+    @discardableResult
+    func deleteSubject(_ id: UUID) -> Bool {
+        updateSubjects { try $0.delete(id) }
+    }
+
+    @discardableResult
+    func assignSubject(_ subjectID: UUID?, to resultID: UUID) -> Bool {
+        guard history.contains(where: { $0.id == resultID }) else { return false }
+        return updateSubjects { try $0.assign(subjectID, to: resultID) }
+    }
+
+    func clearSubjectError() { subjectError = nil }
+
+    private func updateSubjects(_ change: (inout SubjectCatalog) throws -> Void) -> Bool {
+        guard serverTier == .pro, subjectCatalogReady else { return false }
+        do {
+            var updated = subjectCatalog
+            try change(&updated)
+            try subjectStore.save(updated)
+            subjectCatalog = updated
+            subjectError = nil
+            return true
+        } catch {
+            subjectError = (error as? LocalizedError)?.errorDescription ?? "과목 정보를 저장하지 못했습니다."
+            return false
+        }
     }
 
     func updateCorrectness(_ correctness: SolveCorrectness) {
@@ -519,19 +579,34 @@ final class AppState: ObservableObject {
         authenticationPhase = .signedOut
         remainingToday = 0
         serverTier = .free
+        enforceHistoryAccess()
         usageResetAt = nil
     }
 
     private func apply(_ session: ProxySession) {
         remainingToday = session.remainingToday
         serverTier = session.tier
+        enforceHistoryAccess()
         usageResetAt = session.resetAt
     }
 
     private func apply(_ result: GenerationResult) {
         if let remaining = result.remainingToday { remainingToday = remaining }
         if let resetAt = result.resetAt { usageResetAt = resetAt }
-        if let tier = result.tier { serverTier = tier }
+        if let tier = result.tier {
+            serverTier = tier
+            enforceHistoryAccess()
+        }
+    }
+
+    private func enforceHistoryAccess() {
+        guard let id = activeHistoryResultID,
+            !visibleHistory.contains(where: { $0.id == id })
+        else { return }
+        activeHistoryResultID = nil
+        current = nil
+        phase = .idle
+        resultPanel.hide()
     }
 
     private func prepareAndRunSolve() async {
@@ -598,7 +673,8 @@ final class AppState: ObservableObject {
         }
 
         lastCaptureScreen = capture.screen
-        let result = SolveResult(preset: preset)
+        let result = SolveResult(preset: .general)
+        activeHistoryResultID = nil
         cacheImage(capture.data, for: result.id)
         current = result
         waitingSince = Date()
@@ -856,6 +932,18 @@ final class AppState: ObservableObject {
             history = Array(history.prefix(100))
         }
         historyStore.save(history)
+        if subjectCatalogReady {
+            var updated = subjectCatalog
+            updated.prune(keeping: Set(history.map(\.id)))
+            if updated != subjectCatalog {
+                do {
+                    try subjectStore.save(updated)
+                    subjectCatalog = updated
+                } catch {
+                    subjectError = "과목 정보를 저장하지 못했습니다."
+                }
+            }
+        }
     }
 
     private func errorMessage(from error: Error) -> String {

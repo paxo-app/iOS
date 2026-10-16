@@ -16,11 +16,14 @@ struct SettingsView: View {
         .frame(width: 460, height: 660)
         .paxoWindowSurface()
         .onAppear {
-            recentHistoryLimitText = String(appState.recentHistoryLimit)
+            recentHistoryLimitText = String(min(appState.recentHistoryLimit, appState.historyDisplayLimit))
             selectedResultFontSize = appState.resultFontSize
         }
         .onChange(of: appState.recentHistoryLimit) {
-            recentHistoryLimitText = String(appState.recentHistoryLimit)
+            recentHistoryLimitText = String(min(appState.recentHistoryLimit, appState.historyDisplayLimit))
+        }
+        .onChange(of: appState.serverTier) {
+            recentHistoryLimitText = String(min(appState.recentHistoryLimit, appState.historyDisplayLimit))
         }
         .onChange(of: appState.resultFontSize) {
             if selectedResultFontSize != appState.resultFontSize {
@@ -135,16 +138,6 @@ struct SettingsView: View {
                 }
             }
 
-            /* 과목 프리셋은 재공개 전까지 설정에서 숨긴다.
-            Section("과목") {
-                Picker("과목 프리셋", selection: $appState.preset) {
-                    ForEach(SubjectPreset.allCases) { preset in
-                        Text(preset.displayName).tag(preset)
-                    }
-                }
-            }
-            */
-
             Section("최근 풀이") {
                 Toggle("메뉴에 최근 풀이 표시", isOn: $appState.showsRecentHistory)
                 Picker("풀이 표시", selection: $appState.historyShowsExplanation) {
@@ -157,9 +150,13 @@ struct SettingsView: View {
                         .onDisappear { saveRecentHistoryLimit() }
                 }
                 .disabled(!appState.showsRecentHistory)
-                Text("메뉴에는 최신 풀이를 설정한 개수만큼 표시합니다. 이전 풀이는 풀이 기록 탭에서 볼 수 있습니다. 정답만 표시해도 저장된 해설은 기록을 열어 볼 수 있습니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    appState.serverTier == .pro
+                        ? "메뉴에는 최신 풀이를 설정한 개수만큼 표시합니다. 전체 100개는 풀이 기록 탭에서 볼 수 있습니다."
+                        : "메뉴와 풀이 기록에서는 최신 10개까지 볼 수 있습니다. 이전 기록은 삭제되지 않으며 Pro에서 다시 볼 수 있습니다."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Section("캡처") {
@@ -284,9 +281,12 @@ struct SettingsView: View {
 
     private func saveRecentHistoryLimit() {
         if let count = Int(recentHistoryLimitText.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            appState.recentHistoryLimit = min(max(count, 1), 100)
+            let value = min(max(count, 1), appState.historyDisplayLimit)
+            if value != min(appState.recentHistoryLimit, appState.historyDisplayLimit) {
+                appState.recentHistoryLimit = value
+            }
         }
-        recentHistoryLimitText = String(appState.recentHistoryLimit)
+        recentHistoryLimitText = String(min(appState.recentHistoryLimit, appState.historyDisplayLimit))
     }
 }
 
