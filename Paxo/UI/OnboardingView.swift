@@ -155,7 +155,7 @@ struct OnboardingView: View {
                 featureRow(
                     icon: Image(systemName: "gearshape"),
                     title: "설정에서 맞춤 조정",
-                    detail: "캡처 방식(영역/전체 화면), 빠른 채점 모드, 과목 프리셋을 바꿀 수 있어요.")
+                    detail: "캡처 방식(영역/전체 화면)과 빠른 채점 모드를 바꿀 수 있어요.")
             }
             .padding(.top, 4)
         }
