@@ -117,6 +117,7 @@ struct SettingsView: View {
                 }
             }
 
+            /* 과목 프리셋은 재공개 전까지 설정에서 숨긴다.
             Section("과목") {
                 Picker("과목 프리셋", selection: $appState.preset) {
                     ForEach(SubjectPreset.allCases) { preset in
@@ -124,6 +125,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            */
 
             Section("최근 풀이") {
                 Toggle("메뉴에 최근 풀이 표시", isOn: $appState.showsRecentHistory)
@@ -218,13 +220,14 @@ struct SettingsView: View {
                 }
             }
 
-            Section("지원 및 공유") {
+            Section("지원") {
                 if let feedbackURL {
                     Link(destination: feedbackURL) {
                         Label("의견보내기", systemImage: "envelope")
                     }
                 }
 
+                /* 앱 공유는 재공개 전까지 설정에서 숨긴다.
                 if let appStoreURL = DefaultConfig.appStoreURL {
                     ShareLink(item: appStoreURL) {
                         Label("앱 공유", systemImage: "square.and.arrow.up")
@@ -235,6 +238,7 @@ struct SettingsView: View {
                     }
                     .disabled(true)
                 }
+                */
             }
         }
         .formStyle(.grouped)
