@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var store: StoreManager
     @State private var recentHistoryLimitText = ""
+    @State private var selectedResultFontSize: ResultFontSize = .medium
 
     var body: some View {
         TabView {
@@ -14,9 +15,26 @@ struct SettingsView: View {
         }
         .frame(width: 460, height: 660)
         .paxoWindowSurface()
-        .onAppear { recentHistoryLimitText = String(appState.recentHistoryLimit) }
+        .onAppear {
+            recentHistoryLimitText = String(appState.recentHistoryLimit)
+            selectedResultFontSize = appState.resultFontSize
+        }
         .onChange(of: appState.recentHistoryLimit) {
             recentHistoryLimitText = String(appState.recentHistoryLimit)
+        }
+        .onChange(of: appState.resultFontSize) {
+            if selectedResultFontSize != appState.resultFontSize {
+                selectedResultFontSize = appState.resultFontSize
+            }
+        }
+        .onChange(of: selectedResultFontSize) {
+            let selection = selectedResultFontSize
+            // Picker 갱신 중 ObservableObject를 발행하지 않도록 다음 실행 주기에 반영한다.
+            DispatchQueue.main.async {
+                if selectedResultFontSize == selection, appState.resultFontSize != selection {
+                    appState.resultFontSize = selection
+                }
+            }
         }
     }
 
@@ -36,14 +54,14 @@ struct SettingsView: View {
                     Text(message)
                         .font(.caption)
                         .foregroundStyle(.red)
+                    AppleSignInButton()
                     Button("로그인 다시 준비") {
                         appState.retryAppleSignInPreparation()
                     }
                 case .preparing, .signingIn:
                     ProgressView("Apple 로그인을 확인하는 중…")
                 case .signedOut:
-                    Text("메뉴 막대의 Paxo 메뉴에서 Apple로 로그인해주세요.")
-                        .foregroundStyle(.secondary)
+                    AppleSignInButton()
                 }
                 Text("이름과 이메일은 요청하거나 저장하지 않습니다.")
                     .font(.caption)
@@ -58,13 +76,13 @@ struct SettingsView: View {
                 }
                 Text(
                     appState.resultDisplayMode == .toast
-                        ? "정답만 잠깐 떴다 사라집니다. 해설은 생성하지 않아요."
+                        ? "정답만 생성하고 해설은 생성하지 않습니다."
                         : "정답과 해설을 창으로 보여줍니다."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                Picker("결과 글자 크기", selection: $appState.resultFontSize) {
+                Picker("결과 글자 크기", selection: $selectedResultFontSize) {
                     ForEach(ResultFontSize.allCases) { size in
                         Text(size.displayName).tag(size)
                     }

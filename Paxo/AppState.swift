@@ -355,6 +355,27 @@ final class AppState: ObservableObject {
         upsertHistory()
     }
 
+    @discardableResult
+    func updateHistoryAnswer(_ answer: String, for id: UUID) -> Bool {
+        guard !isSolving, var result = current, result.id == id,
+            history.contains(where: { $0.id == id }), result.replaceAnswer(with: answer)
+        else { return false }
+        current = result
+        upsertHistory()
+        return true
+    }
+
+    @discardableResult
+    func updateHistoryExplanation(_ explanation: String, for id: UUID) -> Bool {
+        guard !isSolving, var result = current, result.id == id,
+            history.contains(where: { $0.id == id }), result.replaceExplanation(with: explanation)
+        else { return false }
+        current = result
+        phase = .done
+        upsertHistory()
+        return true
+    }
+
     func requestExplanation() {
         if let current, let startedAt = pendingExplanationStarts[current.id] {
             waitingSince = startedAt
@@ -694,7 +715,7 @@ final class AppState: ObservableObject {
             pendingExplanationStarts[solveID] = nil
             requestGate.finish(requestID)
             apply(generated)
-            saveExplanation(generated.text, for: solveID)
+            saveExplanation(generated.text, for: solveID, basedOnAnswer: answer)
         } catch {
             pendingExplanationStarts[solveID] = nil
             requestGate.finish(requestID)
@@ -706,14 +727,17 @@ final class AppState: ObservableObject {
     }
 
     /// 해설을 그 풀이 기록에 남긴다. 지금 보고 있는 풀이면 화면에도 바로 보인다.
-    private func saveExplanation(_ text: String, for solveID: UUID) {
+    private func saveExplanation(_ text: String, for solveID: UUID, basedOnAnswer: String) {
         guard current?.id == solveID else {
             guard let index = history.firstIndex(where: { $0.id == solveID }) else { return }
-            history[index].explanation = text
+            guard history[index].acceptGeneratedExplanation(text, basedOnAnswer: basedOnAnswer) else { return }
             historyStore.save(history)
             return
         }
-        current?.explanation = text
+        guard var result = current, result.acceptGeneratedExplanation(text, basedOnAnswer: basedOnAnswer) else {
+            return
+        }
+        current = result
         if phase == .solvingExplanation {
             waitingSince = nil
         }
