@@ -161,11 +161,38 @@ struct SolveResult: Identifiable, Codable, Equatable {
     var answer: String?
     var answerContext: AnswerContext?
     var explanation: String?
+    var explanationNeedsReview: Bool?
     var imageFileName: String?
     var correctness: SolveCorrectness?
 
     init(preset: SubjectPreset) {
         self.preset = preset
+    }
+
+    mutating func replaceAnswer(with text: String) -> Bool {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return false }
+        if answer != value {
+            answer = value
+            answerContext = nil
+            if explanation != nil { explanationNeedsReview = true }
+        }
+        return true
+    }
+
+    mutating func replaceExplanation(with text: String) -> Bool {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return false }
+        explanation = value
+        explanationNeedsReview = false
+        return true
+    }
+
+    mutating func acceptGeneratedExplanation(_ text: String, basedOnAnswer: String) -> Bool {
+        guard explanation == nil else { return false }
+        explanation = text
+        explanationNeedsReview = answer != basedOnAnswer
+        return true
     }
 
     var explanationSummary: String {

@@ -7,6 +7,9 @@ struct ResultView: View {
     @State private var copiedField: String?
     @State private var showsProblemImage = false
     @State private var showsSavedExplanation = false
+    @State private var editField: ResultEditField?
+    @State private var editDraft = ""
+    @State private var editingResultID: UUID?
     var onBack: (() -> Void)? = nil
     var backTitle = "최근 풀이로"
     var isHistory = false
@@ -48,6 +51,11 @@ struct ResultView: View {
             showsProblemImage = false
             copiedField = nil
             showsSavedExplanation = appState.historyShowsExplanation
+            editField = nil
+            editingResultID = nil
+        }
+        .sheet(item: $editField) { field in
+            editor(for: field)
         }
     }
 
@@ -105,6 +113,10 @@ struct ResultView: View {
                         Spacer()
                         if let answer = result.answer {
                             copyButton(text: answer, field: "answer")
+                        }
+                        if isHistory {
+                            Button("정답 수정") { beginEdit(.answer, result: result) }
+                                .disabled(isSolving)
                         }
                     }
                     Text(result.answer ?? "—")
@@ -188,6 +200,11 @@ struct ResultView: View {
     @ViewBuilder
     private func explanationSection(_ result: SolveResult) -> some View {
         if let explanation = result.explanation {
+            if result.explanationNeedsReview == true {
+                Label("정답을 수정했어요. 기존 해설이 새 정답과 맞는지 확인해주세요.", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
             if isHistory {
                 DisclosureGroup(isExpanded: $showsSavedExplanation) {
                     savedExplanation(explanation)
@@ -212,6 +229,18 @@ struct ResultView: View {
                     Label("해설 다시 시도", systemImage: "arrow.clockwise")
                 }
             }
+        } else if isHistory {
+            VStack(alignment: .leading, spacing: 8) {
+                Button("해설 입력") { beginEdit(.explanation, result: result) }
+                    .disabled(isSolving)
+                if appState.canRequestExplanation {
+                    Button {
+                        appState.requestExplanation()
+                    } label: {
+                        Label("해설 보기", systemImage: "text.book.closed")
+                    }
+                }
+            }
         } else if appState.canRequestExplanation {
             Button {
                 appState.requestExplanation()
@@ -233,9 +262,52 @@ struct ResultView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 copyButton(text: explanation, field: "explanation")
+                if isHistory, let result = appState.current {
+                    Button("해설 수정") { beginEdit(.explanation, result: result) }
+                        .disabled(isSolving)
+                }
             }
             ExplanationView(text: explanation, fontSize: appState.resultFontSize)
         }
+    }
+
+    private func beginEdit(_ field: ResultEditField, result: SolveResult) {
+        editingResultID = result.id
+        editDraft = field == .answer ? result.answer ?? "" : result.explanation ?? ""
+        editField = field
+    }
+
+    private func editor(for field: ResultEditField) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(field == .answer ? "정답 수정" : "해설 수정")
+                .font(.title3.bold())
+            if field == .answer {
+                TextField("정답", text: $editDraft)
+                    .textFieldStyle(.roundedBorder)
+            } else {
+                TextEditor(text: $editDraft)
+                    .frame(minHeight: 220)
+                    .border(Color.secondary.opacity(0.25))
+            }
+            HStack {
+                Spacer()
+                Button("취소") { editField = nil }
+                Button("저장") { saveEdit(field) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(editDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 480)
+    }
+
+    private func saveEdit(_ field: ResultEditField) {
+        guard let editingResultID else { return }
+        let saved =
+            field == .answer
+            ? appState.updateHistoryAnswer(editDraft, for: editingResultID)
+            : appState.updateHistoryExplanation(editDraft, for: editingResultID)
+        if saved { editField = nil }
     }
 
     private func copyButton(text: String, field: String) -> some View {
@@ -270,6 +342,13 @@ struct ResultView: View {
                 .foregroundStyle(.secondary)
         }
     }
+}
+
+private enum ResultEditField: String, Identifiable {
+    case answer
+    case explanation
+
+    var id: String { rawValue }
 }
 
 /// 화살표와 제목을 같은 버튼으로 묶어 클릭 위치에 따른 동작 차이를 없앤다.
