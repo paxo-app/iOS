@@ -58,7 +58,7 @@ struct SettingsView: View {
                 }
                 Text(
                     appState.resultDisplayMode == .toast
-                        ? "정답만 잠깐 떴다 사라집니다. 해설은 생성하지 않아요."
+                        ? "정답만 생성하고 해설은 생성하지 않습니다."
                         : "정답과 해설을 창으로 보여줍니다."
                 )
                 .font(.caption)

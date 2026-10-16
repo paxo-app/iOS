@@ -136,7 +136,7 @@ enum ResultDisplayMode: String, CaseIterable, Codable, Identifiable {
     var displayName: String {
         switch self {
         case .panel: return "패널 (정답 + 해설)"
-        case .toast: return "토스트 (정답만 잠깐)"
+        case .toast: return "토스트 (정답만)"
         }
     }
 }
