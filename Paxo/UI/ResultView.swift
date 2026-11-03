@@ -11,6 +11,8 @@ struct ResultView: View {
     @State private var editDraft = ""
     @State private var editingResultID: UUID?
     @State private var showsSubjectPicker = false
+    @State private var deletingResultID: UUID?
+    @State private var showsDeleteConfirmation = false
     var onBack: (() -> Void)? = nil
     var backTitle = "최근 풀이로"
     var isHistory = false
@@ -26,6 +28,13 @@ struct ResultView: View {
                     .foregroundStyle(.secondary)
                     .disabled(isSolving)
                     Spacer()
+                    if isHistory, let result = appState.current {
+                        Button("기록 삭제…", role: .destructive) {
+                            deletingResultID = result.id
+                            showsDeleteConfirmation = true
+                        }
+                        .disabled(isSolving)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
@@ -33,6 +42,7 @@ struct ResultView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    HistoryStorageNotice()
                     content
                 }
                 .frame(maxWidth: 680, alignment: .leading)
@@ -54,6 +64,7 @@ struct ResultView: View {
             showsSavedExplanation = appState.historyShowsExplanation
             editField = nil
             editingResultID = nil
+            showsDeleteConfirmation = false
         }
         .sheet(item: $editField) { field in
             editor(for: field)
@@ -66,6 +77,18 @@ struct ResultView: View {
         }
         .onChange(of: appState.serverTier) {
             if appState.serverTier != .pro { showsSubjectPicker = false }
+        }
+        .alert(
+            "이 풀이 기록을 삭제할까요?",
+            isPresented: $showsDeleteConfirmation,
+            presenting: deletingResultID
+        ) { id in
+            Button("취소", role: .cancel) {}
+            Button("기록 삭제", role: .destructive) {
+                if appState.deleteHistory(id) { onBack?() }
+            }
+        } message: { _ in
+            Text("이 Mac에 저장된 정답·해설·문제 이미지와 과목 지정이 삭제됩니다. 되돌릴 수 없습니다.")
         }
     }
 

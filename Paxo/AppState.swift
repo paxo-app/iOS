@@ -23,6 +23,7 @@ final class AppState: ObservableObject {
     @Published private(set) var phase: SolvePhase = .idle
     @Published private(set) var current: SolveResult?
     @Published private(set) var history: [SolveResult] = []
+    @Published private(set) var historyError: String?
     @Published private(set) var subjectCatalog = SubjectCatalog()
     @Published private(set) var subjectCatalogReady = false
     @Published private(set) var subjectError: String?
@@ -166,8 +167,11 @@ final class AppState: ObservableObject {
     private let toast = ToastController()
     private let paywallWindow = PaywallWindowController()
     private let onboardingWindow = OnboardingWindowController()
-    private let historyStore = HistoryStore()
-    private let subjectStore = SubjectStore()
+    private let historyStore: HistoryStore
+    private let subjectStore: SubjectStore
+    private var historyLoadFailed = false
+    private var pendingHistoryImages: [UUID: Data] = [:]
+    private var pendingHistoryDeletion: Set<UUID>?
     private let sessionManager = ProxySessionManager()
     /// 메모리 사용을 제한하고 오래된 문제 이미지는 필요할 때 로컬 기록에서 다시 읽는다.
     private var imageCache: [UUID: Data] = [:]
@@ -186,7 +190,9 @@ final class AppState: ObservableObject {
     private var credentialRevocationTask: Task<Void, Never>?
     private static let appleUserKey = "apple-user-identifier"
 
-    private init() {
+    init(historyStore: HistoryStore = HistoryStore(), subjectStore: SubjectStore = SubjectStore()) {
+        self.historyStore = historyStore
+        self.subjectStore = subjectStore
         quickCheckMode = UserDefaults.standard.bool(forKey: "quickCheckMode")
         showsRecentHistory = UserDefaults.standard.object(forKey: "showsRecentHistory") as? Bool ?? true
         historyShowsExplanation = UserDefaults.standard.object(forKey: "historyShowsExplanation") as? Bool ?? true
@@ -216,13 +222,7 @@ final class AppState: ObservableObject {
     }
 
     func start() {
-        history = historyStore.load()
-        do {
-            subjectCatalog = try subjectStore.load(migrating: history)
-            subjectCatalogReady = true
-        } catch {
-            subjectError = "과목 정보를 불러오지 못했습니다. 앱을 다시 실행해주세요."
-        }
+        loadHistory()
         #if DEBUG
         sessionManager.developmentProxyURL = proxyURL
         #endif
@@ -393,6 +393,82 @@ final class AppState: ObservableObject {
     }
 
     func clearSubjectError() { subjectError = nil }
+
+    func loadHistory() {
+        do {
+            let restored = try historyStore.load()
+            let isRecovering = historyLoadFailed
+            if isRecovering {
+                // 읽기 오류 중에도 화면에 남긴 새 풀이와 수정 내용은 복구한 파일보다 우선한다.
+                let unsavedIDs = Set(history.map(\.id))
+                history = Array(
+                    (history + restored.filter { !unsavedIDs.contains($0.id) })
+                        .sorted { $0.date > $1.date }.prefix(100)
+                )
+            } else {
+                history = restored
+            }
+            historyLoadFailed = false
+            if isRecovering {
+                persistHistory()
+            } else {
+                finishHistoryPersistence()
+            }
+        } catch {
+            historyLoadFailed = true
+            historyError = HistoryStorageError.loadFailed.errorDescription
+        }
+    }
+
+    func retryHistoryStorage() {
+        if historyLoadFailed {
+            loadHistory()
+        } else if let pendingHistoryDeletion {
+            deleteHistory(keeping: history.filter { !pendingHistoryDeletion.contains($0.id) })
+        } else {
+            persistHistory()
+        }
+    }
+
+    @discardableResult
+    func deleteHistory(_ id: UUID) -> Bool {
+        guard visibleHistory.contains(where: { $0.id == id }) else { return false }
+        return deleteHistory(keeping: history.filter { $0.id != id })
+    }
+
+    @discardableResult
+    func deleteAllHistory() -> Bool {
+        deleteHistory(keeping: [])
+    }
+
+    private func deleteHistory(keeping items: [SolveResult]) -> Bool {
+        guard !isSolving, !historyLoadFailed else { return false }
+        pendingHistoryDeletion = Set(history.map(\.id)).subtracting(items.map(\.id))
+        do {
+            try historyStore.save(items)
+        } catch {
+            historyError = HistoryStorageError.deleteFailed.errorDescription
+            return false
+        }
+        pendingHistoryDeletion = nil
+        let keptIDs = Set(items.map(\.id))
+        history = items
+        pendingHistoryImages = pendingHistoryImages.filter { keptIDs.contains($0.key) }
+        imageCache = imageCache.filter { keptIDs.contains($0.key) }
+        thumbnailCache = thumbnailCache.filter { keptIDs.contains($0.key) }
+        imageCacheOrder.removeAll { !keptIDs.contains($0) }
+        pendingExplanationStarts = pendingExplanationStarts.filter { keptIDs.contains($0.key) }
+        if let current, !keptIDs.contains(current.id) {
+            self.current = nil
+            activeHistoryResultID = nil
+            waitingSince = nil
+            phase = .idle
+            toastDismissTask?.cancel()
+            toast.dismiss(animated: false)
+        }
+        finishHistoryPersistence()
+        return true
+    }
 
     private func updateSubjects(_ change: (inout SubjectCatalog) throws -> Void) -> Bool {
         guard serverTier == .pro, subjectCatalogReady else { return false }
@@ -694,7 +770,7 @@ final class AppState: ObservableObject {
             current?.answer = generated.text
             current?.answerContext = generated.answerContext
             if let id = current?.id {
-                current?.imageFileName = historyStore.saveImage(capture.data, for: id)
+                pendingHistoryImages[id] = capture.data
             }
             phase = .answerReady
             upsertHistory()
@@ -802,11 +878,13 @@ final class AppState: ObservableObject {
     }
 
     /// 해설을 그 풀이 기록에 남긴다. 지금 보고 있는 풀이면 화면에도 바로 보인다.
-    private func saveExplanation(_ text: String, for solveID: UUID, basedOnAnswer: String) {
+    func saveExplanation(_ text: String, for solveID: UUID, basedOnAnswer: String) {
+        // 삭제 후 도착한 해설은 현재 화면과 무관하게 버려 기록이 되살아나지 않게 한다.
+        guard history.contains(where: { $0.id == solveID }) else { return }
         guard current?.id == solveID else {
             guard let index = history.firstIndex(where: { $0.id == solveID }) else { return }
             guard history[index].acceptGeneratedExplanation(text, basedOnAnswer: basedOnAnswer) else { return }
-            historyStore.save(history)
+            persistHistory()
             return
         }
         guard var result = current, result.acceptGeneratedExplanation(text, basedOnAnswer: basedOnAnswer) else {
@@ -930,19 +1008,62 @@ final class AppState: ObservableObject {
         if history.count > 100 {
             history = Array(history.prefix(100))
         }
-        historyStore.save(history)
-        if subjectCatalogReady {
-            var updated = subjectCatalog
-            updated.prune(keeping: Set(history.map(\.id)))
-            if updated != subjectCatalog {
-                do {
-                    try subjectStore.save(updated)
-                    subjectCatalog = updated
-                } catch {
-                    subjectError = "과목 정보를 저장하지 못했습니다."
+        persistHistory()
+    }
+
+    private func persistHistory() {
+        guard !historyLoadFailed else { return }
+        let keptIDs = Set(history.map(\.id))
+        pendingHistoryImages = pendingHistoryImages.filter { keptIDs.contains($0.key) }
+        for (id, data) in pendingHistoryImages {
+            do {
+                let fileName = try historyStore.saveImage(data, for: id)
+                if let index = history.firstIndex(where: { $0.id == id }) {
+                    history[index].imageFileName = fileName
                 }
+                if current?.id == id { current?.imageFileName = fileName }
+                pendingHistoryImages[id] = nil
+            } catch {
+                // 정답은 보존하고 이미지만 다음 저장이나 사용자의 재시도 때 다시 기록한다.
+                continue
             }
         }
+        do {
+            try historyStore.save(history)
+        } catch {
+            historyError = HistoryStorageError.saveFailed.errorDescription
+            return
+        }
+        finishHistoryPersistence()
+    }
+
+    private func finishHistoryPersistence() {
+        var messages: [String] = []
+        if pendingHistoryDeletion != nil, let message = HistoryStorageError.deleteFailed.errorDescription {
+            messages.append(message)
+        }
+        if !pendingHistoryImages.isEmpty, let message = HistoryStorageError.imageSaveFailed.errorDescription {
+            messages.append(message)
+        }
+        do {
+            try historyStore.removeOrphanedImages(keeping: history)
+        } catch {
+            messages.append(HistoryStorageError.imageCleanupFailed.errorDescription ?? "")
+        }
+        do {
+            if !subjectCatalogReady {
+                subjectCatalog = try subjectStore.load(migrating: history)
+                subjectCatalogReady = true
+            }
+            var updated = subjectCatalog
+            updated.prune(keeping: Set(history.map(\.id)))
+            // 저장에 실패해도 삭제된 기록의 과목 연결은 메모리에서 즉시 제거한다.
+            subjectCatalog = updated
+            try subjectStore.save(updated)
+        } catch {
+            messages.append(HistoryStorageError.subjectCleanupFailed.errorDescription ?? "")
+        }
+        historyError = messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 
     private func errorMessage(from error: Error) -> String {
