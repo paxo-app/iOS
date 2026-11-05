@@ -9,6 +9,7 @@ struct HistoryArchiveView: View {
     @State private var grouping: HistoryGrouping = .date
     @State private var showsSubjectManager = false
     @State private var query = ""
+    @State private var showsDeleteConfirmation = false
 
     private var rootMatches: [SolveResult] {
         HistoryBrowser.filter(appState.visibleHistory, query: query) { id in
@@ -36,6 +37,21 @@ struct HistoryArchiveView: View {
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     header
+                    if showsDeleteConfirmation {
+                        HistoryDeletionConfirmation(
+                            deletesAll: true, isBusy: appState.isSolving,
+                            onCancel: { showsDeleteConfirmation = false },
+                            onDelete: {
+                                if appState.deleteAllHistory() {
+                                    showsDeleteConfirmation = false
+                                    query = ""
+                                    selectedDate = nil
+                                    selectedSubjectKey = nil
+                                }
+                            }
+                        )
+                    }
+                    HistoryStorageNotice()
                     searchField
                     if appState.serverTier == .pro {
                         proControls
@@ -92,6 +108,9 @@ struct HistoryArchiveView: View {
                 self.selectedSubjectKey = nil
             }
         }
+        .onChange(of: appState.current?.id) {
+            if appState.current == nil { showsDetail = false }
+        }
     }
 
     private var header: some View {
@@ -126,6 +145,9 @@ struct HistoryArchiveView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
+            Button("모든 기록 삭제…", role: .destructive) { showsDeleteConfirmation = true }
+                .disabled(appState.isSolving)
+                .help("무료 플랜에서 보이지 않는 기록을 포함해 이 Mac의 모든 풀이 기록을 삭제합니다.")
         }
     }
 

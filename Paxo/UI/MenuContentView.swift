@@ -21,6 +21,9 @@ struct MenuContentView: View {
         .onChange(of: appState.serverTier) {
             if appState.serverTier != .pro { showsDetail = false }
         }
+        .onChange(of: appState.current?.id) {
+            if appState.current == nil { showsDetail = false }
+        }
     }
 
     private var menuContent: some View {
@@ -101,6 +104,7 @@ struct MenuContentView: View {
                     .foregroundStyle(.tint)
                 }
             }
+            HistoryStorageNotice()
 
             if appState.showsRecentHistory {
                 Divider()

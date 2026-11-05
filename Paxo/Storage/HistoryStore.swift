@@ -13,10 +13,13 @@ struct HistoryStore {
             .appendingPathComponent("Paxo", isDirectory: true)
     }
 
-    func load() -> [SolveResult] {
-        guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        guard let decoded = try? JSONDecoder().decode(LossyArray<SolveResult>.self, from: data) else {
-            return []
+    func load() throws -> [SolveResult] {
+        guard fileManager.fileExists(atPath: fileURL.path) else { return [] }
+        let decoded: LossyArray<SolveResult>
+        do {
+            decoded = try JSONDecoder().decode(LossyArray<SolveResult>.self, from: Data(contentsOf: fileURL))
+        } catch {
+            throw HistoryStorageError.loadFailed
         }
         var seen = Set<UUID>()
         return decoded.elements.sorted { $0.date > $1.date }.filter { seen.insert($0.id).inserted }.prefix(100).map {
@@ -24,19 +27,44 @@ struct HistoryStore {
         }
     }
 
-    func save(_ items: [SolveResult]) {
-        guard prepareDirectory(baseURL) else { return }
-        guard let data = try? JSONEncoder().encode(items) else { return }
-        guard (try? data.write(to: fileURL, options: .atomic)) != nil else { return }
-        removeOrphanedImages(keeping: Set(items.compactMap(\.imageFileName)))
+    func save(_ items: [SolveResult]) throws {
+        do {
+            try fileManager.createDirectory(at: baseURL, withIntermediateDirectories: true)
+            try JSONEncoder().encode(items).write(to: fileURL, options: .atomic)
+        } catch {
+            throw HistoryStorageError.saveFailed
+        }
     }
 
-    func saveImage(_ data: Data, for id: UUID) -> String? {
-        guard prepareDirectory(imagesURL) else { return nil }
+    func saveImage(_ data: Data, for id: UUID) throws -> String {
         let fileName = Self.imageFileName(for: id)
-        let destination = imagesURL.appendingPathComponent(fileName)
-        guard (try? data.write(to: destination, options: .atomic)) != nil else { return nil }
+        do {
+            try fileManager.createDirectory(at: imagesURL, withIntermediateDirectories: true)
+            try data.write(to: imagesURL.appendingPathComponent(fileName), options: .atomic)
+        } catch {
+            throw HistoryStorageError.imageSaveFailed
+        }
         return fileName
+    }
+
+    /// 기록 저장이 실패했을 때 기존 기록의 이미지를 잃지 않도록 저장과 정리를 분리한다.
+    func removeOrphanedImages(keeping items: [SolveResult]) throws {
+        guard fileManager.fileExists(atPath: imagesURL.path) else { return }
+        let fileNames = Set(items.compactMap(\.imageFileName))
+        do {
+            let storedURLs = try fileManager.contentsOfDirectory(at: imagesURL, includingPropertiesForKeys: nil)
+            var failed = false
+            for url in storedURLs where !fileNames.contains(url.lastPathComponent) {
+                do {
+                    try fileManager.removeItem(at: url)
+                } catch {
+                    failed = true
+                }
+            }
+            if failed { throw HistoryStorageError.imageCleanupFailed }
+        } catch {
+            throw HistoryStorageError.imageCleanupFailed
+        }
     }
 
     func loadImage(for item: SolveResult) -> Data? {
@@ -56,21 +84,6 @@ struct HistoryStore {
         "\(id.uuidString.lowercased()).jpg"
     }
 
-    private func prepareDirectory(_ url: URL) -> Bool {
-        (try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)) != nil
-    }
-
-    private func removeOrphanedImages(keeping fileNames: Set<String>) {
-        guard
-            let storedURLs = try? fileManager.contentsOfDirectory(
-                at: imagesURL,
-                includingPropertiesForKeys: nil
-            )
-        else { return }
-        for url in storedURLs where !fileNames.contains(url.lastPathComponent) {
-            try? fileManager.removeItem(at: url)
-        }
-    }
 }
 
 /// 한 항목의 스키마가 손상돼도 나머지 기록은 복원한다.
@@ -127,5 +140,25 @@ private struct DiscardedJSONValue: Decodable {
             return
         }
         throw DecodingError.dataCorruptedError(in: value, debugDescription: "지원하지 않는 JSON 값입니다.")
+    }
+}
+
+enum HistoryStorageError: LocalizedError, Equatable {
+    case loadFailed
+    case saveFailed
+    case deleteFailed
+    case imageSaveFailed
+    case imageCleanupFailed
+    case subjectCleanupFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .loadFailed: "풀이 기록을 불러오지 못했습니다. 기존 기록 보호를 위해 저장과 삭제를 멈췄습니다."
+        case .saveFailed: "풀이 기록을 저장하지 못했습니다. 변경한 내용은 앱을 종료하면 사라질 수 있습니다."
+        case .deleteFailed: "풀이 기록을 삭제하지 못했습니다. 기존 기록은 유지됩니다. 다시 시도하면 요청한 기록을 삭제합니다."
+        case .imageSaveFailed: "문제 이미지를 저장하지 못했습니다. 앱을 종료하기 전에 다시 시도해주세요."
+        case .imageCleanupFailed: "기록은 반영했지만 일부 문제 이미지를 정리하지 못했습니다. 다시 시도해주세요."
+        case .subjectCleanupFailed: "기록은 반영했지만 과목 연결 정보를 정리하지 못했습니다. 다시 시도해주세요."
+        }
     }
 }

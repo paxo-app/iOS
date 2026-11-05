@@ -11,6 +11,8 @@ struct ResultView: View {
     @State private var editDraft = ""
     @State private var editingResultID: UUID?
     @State private var showsSubjectPicker = false
+    @State private var deletingResultID: UUID?
+    @State private var showsDeleteConfirmation = false
     var onBack: (() -> Void)? = nil
     var backTitle = "최근 풀이로"
     var isHistory = false
@@ -26,13 +28,35 @@ struct ResultView: View {
                     .foregroundStyle(.secondary)
                     .disabled(isSolving)
                     Spacer()
+                    if isHistory, let result = appState.current {
+                        Button("기록 삭제…", role: .destructive) {
+                            deletingResultID = result.id
+                            showsDeleteConfirmation = true
+                        }
+                        .disabled(isSolving)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 Divider()
             }
+            if showsDeleteConfirmation, let id = deletingResultID {
+                HistoryDeletionConfirmation(
+                    deletesAll: false, isBusy: isSolving,
+                    onCancel: { showsDeleteConfirmation = false },
+                    onDelete: {
+                        if appState.deleteHistory(id) {
+                            showsDeleteConfirmation = false
+                            onBack?()
+                        }
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    HistoryStorageNotice()
                     content
                 }
                 .frame(maxWidth: 680, alignment: .leading)
@@ -54,6 +78,7 @@ struct ResultView: View {
             showsSavedExplanation = appState.historyShowsExplanation
             editField = nil
             editingResultID = nil
+            showsDeleteConfirmation = false
         }
         .sheet(item: $editField) { field in
             editor(for: field)

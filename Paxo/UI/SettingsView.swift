@@ -69,6 +69,9 @@ struct SettingsView: View {
                 Text("이름과 이메일은 요청하거나 저장하지 않습니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text("로그아웃·계정 삭제 후에도 이 Mac의 풀이 기록과 문제 이미지는 유지됩니다. 풀이 기록 탭에서 별도로 삭제할 수 있습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("결과 표시") {
@@ -265,7 +268,9 @@ struct SettingsView: View {
                 appState.deleteAccount()
             }
         } message: {
-            Text("Apple 로그인 연결과 서버의 사용량 정보가 삭제되며 되돌릴 수 없습니다. 기기의 풀이 기록은 유지됩니다.")
+            Text(
+                "Apple 로그인 연결과 서버의 사용량 정보가 삭제되며 되돌릴 수 없습니다. 기기의 풀이 기록과 문제 이미지는 유지됩니다. 로컬 데이터는 설정의 풀이 기록 탭에서 삭제할 수 있습니다."
+            )
         }
     }
 

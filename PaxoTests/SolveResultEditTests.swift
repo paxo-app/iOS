@@ -76,9 +76,9 @@ struct SolveResultEditTests {
         edited.explanation = "기존 해설"
         let saved = edited.replaceAnswer(with: "②")
         #expect(saved)
-        store.save([edited])
+        try store.save([edited])
 
-        let restored = try #require(store.load().first)
+        let restored = try #require(try store.load().first)
         #expect(restored.answer == "②")
         #expect(restored.explanation == "기존 해설")
         #expect(restored.explanationNeedsReview == true)

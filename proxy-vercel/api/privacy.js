@@ -18,12 +18,13 @@ const PRIVACY_HTML = `<!doctype html>
 </head>
 <body>
 <h1>Paxo 개인정보 처리방침</h1>
-<p>시행일: 2026년 9월 25일</p>
+<p>시행일: 2026년 9월 25일 · 최종 수정일: 2026년 11월 3일</p>
 
 <h2>처리하는 정보</h2>
 <ul>
   <li><strong>화면 캡처 이미지와 풀이 요청</strong>: 사용자가 풀이를 실행할 때 Google Gemini API로
-      전달됩니다. Paxo는 이 콘텐츠를 파일이나 데이터베이스에 저장하지 않습니다. 요청 처리를 위해
+      전달됩니다. Paxo 서버는 이 콘텐츠를 파일이나 데이터베이스에 보관하지 않습니다.
+      정답 생성에 성공한 문제 이미지와 풀이 기록은 아래 안내에 따라 사용자 Mac에 저장됩니다. 요청 처리를 위해
       Vercel과 Google이 일시적으로 데이터를 처리할 수 있으며 각 제공자의 정책이 적용됩니다.</li>
   <li><strong>Apple 로그인 정보</strong>: Apple이 발급한 사용자 식별자는 HMAC으로 가명화한 뒤
       사용합니다. 이름과 이메일 권한은 요청하지 않습니다. 로그인 유지용 Apple 토큰은 암호화해
@@ -46,13 +47,23 @@ Google(Gemini API)이 요청을 처리합니다. 각 제공자의 보관·처리
 개인정보 처리방침을 따릅니다.</p>
 
 <h2>로컬 저장 데이터</h2>
-<p>최근 풀이의 정답·해설 텍스트와 앱 설정은 사용자 Mac에 저장됩니다. 캡처 이미지는 디스크에
-저장하지 않습니다. 로그아웃이나 서버 계정 삭제만으로 로컬 풀이 기록은 삭제되지 않으며 사용자가
-앱 데이터를 제거해 삭제할 수 있습니다.</p>
+<p>최근 최대 100개의 풀이 기록(정답·해설, 풀이 시각, 자가 채점 결과, 직접 수정한 내용과 문제 유형·선택지 정보)과
+정답 생성에 성공한 문제의 JPEG 이미지를 사용자 Mac의 앱 데이터 영역에 보관합니다.
+앱 설정과 사용자가 만든 과목 이름·기록의 과목 지정 정보도 이 Mac에 저장됩니다.
+무료 플랜의 최신 10개 열람 제한은 보관 개수와 다르며 구독 종료만으로 이전 기록을 삭제하지 않습니다.
+100개를 초과해 보관 대상에서 빠진 기록의 문제 이미지는 정리합니다.</p>
+<p>풀이 기록 상세 화면의 ‘기록 삭제…’에서 해당 기록과 문제 이미지를 삭제할 수 있습니다.
+설정 → 풀이 기록 → ‘모든 기록 삭제…’에서는 검색·날짜·과목 필터와 무료 플랜의 열람 범위에 관계없이
+이 Mac에 보관된 모든 풀이 기록과 문제 이미지를 삭제합니다. 삭제한 기록의 과목 지정 정보도 정리하며,
+사용자가 만든 과목 목록과 앱 설정은 유지합니다. 과목 목록은 과목 관리에서 별도로 삭제할 수 있습니다.
+저장·삭제에 실패하면 앱에 안내하며 다시 시도할 수 있습니다.</p>
+<p>로그아웃이나 서버 계정 삭제만으로 로컬 풀이 기록과 문제 이미지는 삭제되지 않습니다.
+로컬 기록 삭제는 서버 계정이나 구독을 삭제·해지하거나 이미 처리한 풀이 사용량을 되돌리는 동작이 아닙니다.</p>
 
 <h2>계정 삭제</h2>
 <p>앱 설정의 ‘계정 삭제’를 사용하면 Apple 로그인 토큰을 폐기하고 Paxo 서버의 계정·세션·사용량
-정보를 삭제합니다. 기기에 저장된 풀이 기록은 별도로 유지됩니다.</p>
+정보를 삭제합니다. 기기에 저장된 풀이 기록과 문제 이미지, 과목 목록·지정 정보, 앱 설정은 별도로 유지됩니다.
+로컬 풀이 기록과 문제 이미지는 설정의 풀이 기록 탭에서 삭제할 수 있습니다.</p>
 
 <h2>문의</h2>
 <p>개인정보 관련 문의: <a href="mailto:kimsonghansung@gmail.com">kimsonghansung@gmail.com</a></p>
@@ -61,7 +72,15 @@ Google(Gemini API)이 요청을 처리합니다. 각 제공자의 보관·처리
 <h2>Privacy Policy (English Summary)</h2>
 <p>Paxo uses Sign in with Apple without requesting name or email. The Apple user identifier is
 pseudonymized, and the Apple refresh token is encrypted for up to 30 days. Screen captures are sent
-through Vercel to Google Gemini only to generate an answer and are not persistently stored by Paxo.
+through Vercel to Google Gemini to generate answers and explanations; Paxo servers do not persist their content.
+The app stores up to 100 recent solve records and their JPEG captures locally on your Mac, along with
+settings, subject names, and subject assignments. Free access to the latest 10 records is a viewing limit,
+not a retention limit. Images belonging to records removed by the 100-record limit are cleaned up.
+Delete an individual record from its detail screen, or delete all local records and images from
+Settings → Solve History, including older records hidden by the free plan and records outside the current filter.
+Record deletion removes subject assignments but keeps subject names and settings. Failed storage or cleanup
+is shown in the app and can be retried. Signing out or deleting your account keeps local data;
+deleting local records does not delete your server account, cancel your subscription, or refund used solves.
 Session, quota, and solve-state records contain no image or prompt content and expire within 48 hours;
 login continuity records expire within 30 days. Free accounts receive 3 solves per day and Pro accounts
 receive up to 100. Account deletion is available in the app. Contact: kimsonghansung@gmail.com</p>
