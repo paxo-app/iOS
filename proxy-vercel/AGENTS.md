@@ -62,7 +62,7 @@ x-paxo-token:  <공유 시크릿(Shared Secret)>
 
 * `/session/challenge`의 일회용 nonce와 Apple identity token·authorization code로 로그인한다.
 * Apple 사용자 식별자는 HMAC 처리하고, Apple 갱신 토큰은 AES-256-GCM으로 암호화한다.
-* 무료는 하루 3회, Pro는 하루 100회이며 정답 성공 때만 차감한다.
+* 무료는 하루 2회, Pro는 하루 100회이며 정답 성공 때만 차감한다. 사용량은 매일 오전 6시(Asia/Seoul)에 초기화한다.
 * 같은 `solveId`의 해설은 정답 성공 후 한 번만 허용하며 추가 차감하지 않는다.
 * `APP_TOKEN`은 반드시 설정한다. 누락 상태에서 인증을 우회하는 배포는 금지한다.
 * Production과 Preview가 Redis를 공유할 때 `REDIS_KEY_PREFIX`를 각각 `paxo:prod`, `paxo:preview`로 강제한다.

@@ -18,7 +18,7 @@ const PRIVACY_HTML = `<!doctype html>
 </head>
 <body>
 <h1>Paxo 개인정보 처리방침</h1>
-<p>시행일: 2026년 9월 25일 · 최종 수정일: 2026년 11월 3일</p>
+<p>시행일: 2026년 9월 25일 · 최종 수정일: 2026년 11월 5일</p>
 
 <h2>처리하는 정보</h2>
 <ul>
@@ -38,8 +38,9 @@ const PRIVACY_HTML = `<!doctype html>
 
 <h2>이용 목적과 제공량</h2>
 <p>위 정보는 로그인, 무료·Pro 권한 확인, 일일 사용량 제한, 중복 요청 방지와 AI 풀이 생성에만
-사용합니다. 무료 사용자는 하루 3회, Pro 사용자는 비용 보호를 위해 하루 최대 100회 풀이할 수
-있으며 해설 1회는 해당 풀이에 포함됩니다.</p>
+사용합니다. 무료 사용자는 하루 2회, Pro 사용자는 비용 보호를 위해 하루 최대 100회 풀이할 수
+있으며 해설 1회는 해당 풀이에 포함됩니다. 풀이 횟수는 매일 오전 6시(한국 시간)에 초기화되며
+남은 횟수는 이월되지 않습니다.</p>
 
 <h2>제3자 처리</h2>
 <p>서비스 제공을 위해 Apple(App Store 및 Apple 로그인), Vercel(서버 호스팅), Upstash(Redis),
@@ -82,7 +83,8 @@ Record deletion removes subject assignments but keeps subject names and settings
 is shown in the app and can be retried. Signing out or deleting your account keeps local data;
 deleting local records does not delete your server account, cancel your subscription, or refund used solves.
 Session, quota, and solve-state records contain no image or prompt content and expire within 48 hours;
-login continuity records expire within 30 days. Free accounts receive 3 solves per day and Pro accounts
-receive up to 100. Account deletion is available in the app. Contact: kimsonghansung@gmail.com</p>
+login continuity records expire within 30 days. Free accounts receive 2 solves per day and Pro accounts
+receive up to 100. Daily allowances reset at 6:00 a.m. Korea Standard Time (Asia/Seoul) and unused solves
+do not roll over. Account deletion is available in the app. Contact: kimsonghansung@gmail.com</p>
 </body>
 </html>`;

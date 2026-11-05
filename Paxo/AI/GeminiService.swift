@@ -241,7 +241,8 @@ enum GeminiError: LocalizedError {
         case .emptyResponse:
             return "AI 응답이 비어 있습니다. 다시 시도해주세요."
         case .freeDailyLimit:
-            return "오늘 무료 풀이 3회를 모두 사용했습니다. Pro로 업그레이드하거나 내일 다시 이용해주세요."
+            return
+                "무료 풀이 \(UsagePolicy.dailyFreeLimit)회를 모두 사용했습니다. \(UsagePolicy.dailyResetNotice) Pro로 업그레이드하거나 초기화 후 다시 이용해주세요."
         case .http(let code, let message):
             if let message, !message.isEmpty { return message }
             return "서버 오류가 발생했습니다. (HTTP \(code)) 잠시 후 다시 시도해주세요."
@@ -265,7 +266,8 @@ enum GeminiError: LocalizedError {
                 return "네트워크 오류가 발생했습니다. 다시 시도해주세요."
             }
         case .proDailyLimit:
-            return "Pro의 일일 안전 한도 100회를 모두 사용했습니다. 내일 다시 이용해주세요."
+            return
+                "Pro의 일일 안전 한도 \(UsagePolicy.dailyProLimit)회를 모두 사용했습니다. \(UsagePolicy.dailyResetNotice) 초기화 후 다시 이용해주세요."
         case .rateLimited:
             return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
         case .serviceUnavailable:

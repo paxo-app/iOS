@@ -99,10 +99,30 @@ test("앱 토큰과 Bearer 세션을 엄격히 검사한다", () => {
   assert.throws(() => bearerToken({ headers: { authorization: "Bearer short" } }), HttpError);
 });
 
-test("사용량 날짜와 초기화 시각은 Asia/Seoul 자정을 따른다", () => {
-  const before = seoulUsageWindow(new Date("2026-09-21T14:59:59.000Z"));
-  const after = seoulUsageWindow(new Date("2026-09-21T15:00:00.000Z"));
-  assert.equal(before.day, "2026-09-21");
-  assert.equal(before.resetAt, "2026-09-21T15:00:00.000Z");
-  assert.equal(after.day, "2026-09-22");
+test("사용량은 서울 자정에 유지되고 오전 6시 정각에 초기화된다", () => {
+  for (const instant of [
+    "2026-09-21T14:59:59.999Z",
+    "2026-09-21T15:00:00.000Z",
+    "2026-09-21T20:59:59.999Z",
+  ]) {
+    assert.deepEqual(seoulUsageWindow(new Date(instant)), {
+      day: "2026-09-21",
+      resetAt: "2026-09-21T21:00:00.000Z",
+    });
+  }
+  assert.deepEqual(seoulUsageWindow(new Date("2026-09-21T21:00:00.000Z")), {
+    day: "2026-09-22",
+    resetAt: "2026-09-22T21:00:00.000Z",
+  });
+});
+
+test("월말과 연말에도 서울 오전 6시 사용량 경계를 유지한다", () => {
+  for (const [instant, day, resetAt] of [
+    ["2026-12-31T20:59:59.999Z", "2026-12-31", "2026-12-31T21:00:00.000Z"],
+    ["2026-12-31T21:00:00.000Z", "2027-01-01", "2027-01-01T21:00:00.000Z"],
+    ["2028-02-29T20:59:59.999Z", "2028-02-29", "2028-02-29T21:00:00.000Z"],
+    ["2028-02-29T21:00:00.000Z", "2028-03-01", "2028-03-01T21:00:00.000Z"],
+  ]) {
+    assert.deepEqual(seoulUsageWindow(new Date(instant)), { day, resetAt });
+  }
 });

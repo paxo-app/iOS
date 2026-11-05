@@ -319,7 +319,7 @@ final class AppState: ObservableObject {
         Task { await store.reloadProductsIfNeeded() }
     }
 
-    /// 메뉴가 열릴 때 서버 정본을 새로 읽어 자정 초기화와 구독 변경을 반영한다.
+    /// 메뉴가 열릴 때 서버 정본을 새로 읽어 오전 6시 초기화와 구독 변경을 반영한다.
     func refreshFreeRemaining() {
         Task {
             guard case .signedIn = authenticationPhase else { return }
@@ -706,7 +706,7 @@ final class AppState: ObservableObject {
                 if session.tier == .free {
                     showPaywall()
                 } else {
-                    phase = .failedAnswer("Pro의 일일 안전 한도 100회를 모두 사용했습니다. 내일 다시 이용해주세요.")
+                    phase = .failedAnswer(GeminiError.proDailyLimit.localizedDescription)
                     resultPanel.show(appState: self, on: Self.screenUnderMouse())
                 }
                 return
@@ -798,7 +798,7 @@ final class AppState: ObservableObject {
             waitingSince = nil
             toast.dismiss(animated: false)
             remainingToday = 0
-            phase = .failedAnswer("Pro의 일일 안전 한도 100회를 모두 사용했습니다. 내일 다시 이용해주세요.")
+            phase = .failedAnswer(GeminiError.proDailyLimit.localizedDescription)
             resultPanel.show(appState: self, on: lastCaptureScreen)
         } catch {
             guard requestGate.isCurrent(requestID) else { return }

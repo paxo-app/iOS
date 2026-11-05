@@ -80,6 +80,11 @@ struct PaywallView: View {
                 }
             }
 
+            Text(UsagePolicy.dailyResetNotice)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
             if let error = store.errorMessage {
                 Text(error)
                     .font(.caption)

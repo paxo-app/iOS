@@ -141,9 +141,11 @@ final class ProxySessionManager {
     }
 
     func session(forceRefresh: Bool = false) async throws -> ProxySession {
+        let now = clock()
         if !forceRefresh,
             let cachedSession,
-            cachedSession.expiresAt.timeIntervalSince(clock()) > 15
+            cachedSession.expiresAt.timeIntervalSince(now) > 15,
+            cachedSession.resetAt > now
         {
             return cachedSession
         }

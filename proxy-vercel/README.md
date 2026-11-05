@@ -8,7 +8,7 @@ Vercel `iad1` 리전에서 Apple 로그인, App Store 구독 검증, 영속 사�
 1. 앱이 `/session/challenge`에서 일회용 nonce를 받는다.
 2. Apple 로그인 결과를 `/session`으로 보내 15분 세션과 30일 갱신 토큰을 받는다.
 3. 앱이 Bearer 세션으로 `/generate`를 호출한다.
-4. 서버가 Redis에서 무료 3회 또는 Pro 100회 한도를 예약한 뒤 Gemini를 호출한다.
+4. 서버가 Redis에서 무료 2회 또는 Pro 100회 한도를 예약한 뒤 Gemini를 호출한다. 일일 한도는 매일 오전 6시(Asia/Seoul)에 초기화한다.
 5. 정답 성공 시에만 사용량을 확정하며 같은 `solveId`의 해설 1회는 추가 차감하지 않는다.
 
 Apple 사용자 식별자는 HMAC 처리하며 Apple 갱신 토큰은 AES-256-GCM으로 암호화한다. 프롬프트,
@@ -53,3 +53,8 @@ npx vercel --prod
 배포 후 `/privacy`는 200, 인증 없는 `/generate`는 401이어야 한다. Preview에서 Sandbox Apple
 로그인과 구매·복원을 먼저 확인한 뒤 Production을 배포한다. Vercel Firewall은 처음에 로그 모드로
 `/session` 10회/분/IP, `/generate` 60회/분/IP를 관찰하고 정상 요청을 확인한 뒤 Enforce로 바꾼다.
+
+자정 초기화에서 오전 6시 초기화로 전환하는 첫 배포는 한국 시간 오전 6시 이후에 진행한다.
+기존 날짜별 Redis 키를 유지하므로 그날 누적 사용량을 이어 쓰고 다음 날 오전 6시부터 초기화한다.
+오전 0시부터 6시 전에는 두 정책이 서로 다른 날짜 키를 사용하므로 첫 전환 배포를 피한다.
+정책 변경은 프록시를 먼저 배포한 뒤 앱을 배포한다.
