@@ -37,6 +37,20 @@ struct HistoryArchiveView: View {
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     header
+                    if showsDeleteConfirmation {
+                        HistoryDeletionConfirmation(
+                            deletesAll: true, isBusy: appState.isSolving,
+                            onCancel: { showsDeleteConfirmation = false },
+                            onDelete: {
+                                if appState.deleteAllHistory() {
+                                    showsDeleteConfirmation = false
+                                    query = ""
+                                    selectedDate = nil
+                                    selectedSubjectKey = nil
+                                }
+                            }
+                        )
+                    }
                     HistoryStorageNotice()
                     searchField
                     if appState.serverTier == .pro {
@@ -96,20 +110,6 @@ struct HistoryArchiveView: View {
         }
         .onChange(of: appState.current?.id) {
             if appState.current == nil { showsDetail = false }
-        }
-        .alert("모든 풀이 기록을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
-            Button("취소", role: .cancel) {}
-            Button("모든 기록 삭제", role: .destructive) {
-                if appState.deleteAllHistory() {
-                    query = ""
-                    selectedDate = nil
-                    selectedSubjectKey = nil
-                }
-            }
-        } message: {
-            Text(
-                "검색·날짜·과목 필터와 관계없이 이 Mac의 모든 풀이 기록과 문제 이미지를 삭제합니다. 무료 플랜에서 보이지 않는 이전 기록도 포함되며 되돌릴 수 없습니다. 과목 목록은 유지됩니다."
-            )
         }
     }
 

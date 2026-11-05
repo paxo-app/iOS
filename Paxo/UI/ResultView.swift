@@ -40,6 +40,20 @@ struct ResultView: View {
                 .padding(.vertical, 10)
                 Divider()
             }
+            if showsDeleteConfirmation, let id = deletingResultID {
+                HistoryDeletionConfirmation(
+                    deletesAll: false, isBusy: isSolving,
+                    onCancel: { showsDeleteConfirmation = false },
+                    onDelete: {
+                        if appState.deleteHistory(id) {
+                            showsDeleteConfirmation = false
+                            onBack?()
+                        }
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     HistoryStorageNotice()
@@ -77,18 +91,6 @@ struct ResultView: View {
         }
         .onChange(of: appState.serverTier) {
             if appState.serverTier != .pro { showsSubjectPicker = false }
-        }
-        .alert(
-            "이 풀이 기록을 삭제할까요?",
-            isPresented: $showsDeleteConfirmation,
-            presenting: deletingResultID
-        ) { id in
-            Button("취소", role: .cancel) {}
-            Button("기록 삭제", role: .destructive) {
-                if appState.deleteHistory(id) { onBack?() }
-            }
-        } message: { _ in
-            Text("이 Mac에 저장된 정답·해설·문제 이미지와 과목 지정이 삭제됩니다. 되돌릴 수 없습니다.")
         }
     }
 
