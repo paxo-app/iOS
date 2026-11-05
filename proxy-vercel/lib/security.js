@@ -11,6 +11,7 @@ import {
 import { HttpError } from "./errors.js";
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const USAGE_RESET_OFFSET_MS = 6 * 60 * 60 * 1000;
 
 function constantTimeEqual(left, right) {
   const leftBuffer = Buffer.from(left);
@@ -78,10 +79,12 @@ function decryptSecret(value, hexKey) {
 }
 
 function seoulUsageWindow(now = new Date()) {
-  const shifted = new Date(now.getTime() + KST_OFFSET_MS);
+  // 새벽 공부가 자정에 끊기지 않도록 오전 6시 전 사용량은 전날에 포함한다.
+  const shifted = new Date(now.getTime() + KST_OFFSET_MS - USAGE_RESET_OFFSET_MS);
   const day = shifted.toISOString().slice(0, 10);
   const resetAt = new Date(
-    Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + 1) - KST_OFFSET_MS
+    Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + 1)
+      - KST_OFFSET_MS + USAGE_RESET_OFFSET_MS
   );
   return { day, resetAt: resetAt.toISOString() };
 }

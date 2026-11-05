@@ -74,7 +74,8 @@ const SERVICE_HTML = `<!doctype html>
 
 <section aria-labelledby="plans">
   <h2 id="plans">무료 이용 및 Pro 구독상품</h2>
-  <p>무료 이용은 하루 3회, Pro는 하루 최대 100회 풀이를 제공합니다.
+  <p>무료 이용은 하루 2회, Pro는 하루 최대 100회 풀이를 제공합니다.
+  풀이 횟수는 매일 오전 6시(한국 시간)에 초기화되며 남은 횟수는 이월되지 않습니다.
   정답 제공에 성공했을 때 1회 차감하며, 해당 풀이의 해설은 추가 차감하지 않습니다.</p>
   <div class="plans">
     <div class="plan"><h3>Paxo Pro 월간</h3><p class="price">5,500원 / 1개월</p>

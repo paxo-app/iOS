@@ -7,12 +7,12 @@ import { MemoryStore, SOLVE_ID, appRequest, baseConfig, createResponse, generate
 const NOW = new Date("2026-09-22T03:00:00.000Z");
 const SESSION_TOKEN = "s".repeat(43);
 
-function setup({ fetcher, tier = "free" } = {}) {
+function setup({ clock = () => NOW, fetcher, tier = "free" } = {}) {
   const store = new MemoryStore();
   store.installSession(SESSION_TOKEN, { tier });
   const calls = [];
   const handler = createGenerateHandler({
-    clock: () => NOW,
+    clock,
     configLoader: () => baseConfig(),
     fetcher:
       fetcher ||
@@ -43,15 +43,16 @@ test("정답 성공 후 사용량과 헤더를 서버 기준으로 갱신한다"
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.headers["x-paxo-tier"], "free");
-  assert.equal(res.headers["x-paxo-remaining"], "2");
+  assert.equal(res.headers["x-paxo-remaining"], "1");
+  assert.equal(res.headers["x-paxo-reset-at"], "2026-09-22T21:00:00.000Z");
   assert.equal(calls.length, 1);
   assert.equal(await store.getUsage("subject-1", "2026-09-22"), 1);
   const upstreamBody = JSON.parse(calls[0].options.body);
   assert.equal(upstreamBody.generationConfig.maxOutputTokens, 2048);
 });
 
-test("무료 4번째와 Pro 101번째 요청은 Gemini 전에 차단한다", async () => {
-  for (const [tier, used] of [["free", 3], ["pro", 100]]) {
+test("무료 3번째와 Pro 101번째 요청은 Gemini 전에 차단한다", async () => {
+  for (const [tier, used] of [["free", 2], ["pro", 100]]) {
     const { calls, handler, store } = setup({ tier });
     store.usage.set("subject-1:2026-09-22", used);
     const res = createResponse();
@@ -61,6 +62,44 @@ test("무료 4번째와 Pro 101번째 요청은 Gemini 전에 차단한다", asy
     assert.equal(res.headers["x-paxo-tier"], tier);
     assert.equal(res.headers["x-paxo-remaining"], "0");
     assert.equal(calls.length, 0);
+  }
+});
+
+test("무료 정답은 두 번 성공하고 세 번째부터 차단한다", async () => {
+  const { calls, handler, store } = setup();
+  for (const [index, remaining] of [[1, "1"], [2, "0"], [3, "0"]]) {
+    const res = createResponse();
+    const solveId = `11111111-2222-4333-8444-55555555555${index}`;
+    await handler(request(generateBody("answer", solveId)), res);
+    assert.equal(res.statusCode, index <= 2 ? 200 : 429);
+    assert.equal(res.headers["x-paxo-remaining"], remaining);
+  }
+  assert.equal(calls.length, 2);
+  assert.equal(await store.getUsage("subject-1", "2026-09-22"), 2);
+});
+
+test("무료와 Pro의 소진된 한도는 자정에 유지되고 오전 6시에 새로 제공된다", async () => {
+  for (const [tier, limit] of [["free", 2], ["pro", 100]]) {
+    let now = new Date("2026-09-21T15:00:00.000Z");
+    const { calls, handler, store } = setup({ clock: () => now, tier });
+    store.usage.set("subject-1:2026-09-21", limit);
+    for (const instant of ["2026-09-21T15:00:00.000Z", "2026-09-21T20:59:59.999Z"]) {
+      now = new Date(instant);
+      const res = createResponse();
+      await handler(request(generateBody()), res);
+      assert.equal(res.statusCode, 429);
+      assert.equal(res.headers["x-paxo-reset-at"], "2026-09-21T21:00:00.000Z");
+    }
+    assert.equal(calls.length, 0);
+
+    now = new Date("2026-09-21T21:00:00.000Z");
+    const res = createResponse();
+    await handler(request(generateBody()), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers["x-paxo-remaining"], String(limit - 1));
+    assert.equal(res.headers["x-paxo-reset-at"], "2026-09-22T21:00:00.000Z");
+    assert.equal(await store.getUsage("subject-1", "2026-09-21"), limit);
+    assert.equal(await store.getUsage("subject-1", "2026-09-22"), 1);
   }
 });
 
@@ -80,9 +119,9 @@ test("동시 요청에서도 한도를 넘는 호출은 Gemini에 전달하지 �
     )
   );
 
-  assert.equal(calls.length, 3);
-  assert.equal(responses.filter((response) => response.statusCode === 200).length, 3);
-  assert.equal(responses.filter((response) => response.statusCode === 429).length, 1);
+  assert.equal(calls.length, 2);
+  assert.equal(responses.filter((response) => response.statusCode === 200).length, 2);
+  assert.equal(responses.filter((response) => response.statusCode === 429).length, 2);
 });
 
 test("Gemini 실패와 타임아웃은 차감하지 않고 예약을 해제한다", async () => {
@@ -108,13 +147,50 @@ test("해설은 성공한 정답에 한 번만 허용하고 추가 차감하지 
   const explanation = createResponse();
   await handler(request(generateBody("explanation")), explanation);
   assert.equal(explanation.statusCode, 200);
-  assert.equal(explanation.headers["x-paxo-remaining"], "2");
+  assert.equal(explanation.headers["x-paxo-remaining"], "1");
   assert.equal(await store.getUsage("subject-1", "2026-09-22"), 1);
 
   const duplicate = createResponse();
   await handler(request(generateBody("explanation")), duplicate);
   assert.equal(duplicate.statusCode, 409);
   assert.equal(JSON.parse(duplicate.body).error.code, "duplicate_request");
+});
+
+test("오전 6시를 지나 완료한 정답은 예약한 날짜에만 차감하고 해설은 새 날짜에서 차감하지 않는다", async () => {
+  let now = new Date("2026-09-21T20:59:59.999Z");
+  const { handler, store } = setup({
+    clock: () => now,
+    fetcher: async () => {
+      now = new Date("2026-09-21T21:00:00.000Z");
+      return {
+        status: 200,
+        text: async () => JSON.stringify({
+          candidates: [{ finishReason: "STOP", content: { parts: [{ text: "③" }] } }],
+        }),
+      };
+    },
+  });
+  const answer = createResponse();
+  await handler(request(generateBody()), answer);
+  assert.equal(answer.statusCode, 200);
+  assert.equal(await store.getUsage("subject-1", "2026-09-21"), 1);
+  assert.equal(await store.getUsage("subject-1", "2026-09-22"), 0);
+  assert.equal(store.answerReservations.size, 0);
+
+  const explanation = createResponse();
+  await handler(request(generateBody("explanation")), explanation);
+  assert.equal(explanation.statusCode, 200);
+  assert.equal(explanation.headers["x-paxo-remaining"], "2");
+  assert.equal(explanation.headers["x-paxo-reset-at"], "2026-09-22T21:00:00.000Z");
+  assert.equal(await store.getUsage("subject-1", "2026-09-21"), 1);
+  assert.equal(await store.getUsage("subject-1", "2026-09-22"), 0);
+
+  for (const kind of ["answer", "explanation"]) {
+    const duplicate = createResponse();
+    await handler(request(generateBody(kind)), duplicate);
+    assert.equal(duplicate.statusCode, 409);
+    assert.equal(JSON.parse(duplicate.body).error.code, "duplicate_request");
+  }
 });
 
 test("정답 전에 요청한 해설과 만료 세션을 거절한다", async () => {

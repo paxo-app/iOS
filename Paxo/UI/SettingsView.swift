@@ -208,6 +208,9 @@ struct SettingsView: View {
                         appState.showPaywall()
                     }
                 }
+                Text(UsagePolicy.dailyResetNotice)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Button("구매 복원") {
                     Task { await store.restore() }
                 }

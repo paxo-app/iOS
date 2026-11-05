@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { createChallengeHandler } from "../api/session-challenge.js";
 import { createSessionHandler, parseSessionBody } from "../api/session.js";
-import { resolveTier } from "../lib/session-service.js";
+import { issueSession, resolveTier } from "../lib/session-service.js";
 import { hashSubject, hashToken, sha256 } from "../lib/security.js";
 import { MemoryStore, appRequest, baseConfig, createResponse } from "./helpers.js";
 
@@ -51,6 +51,7 @@ test("일회용 nonce와 Apple 로그인 증명으로 15분 세션을 발급한�
   const body = JSON.parse(res.body);
   assert.equal(body.tier, "pro");
   assert.equal(body.remainingToday, 100);
+  assert.equal(body.resetAt, "2026-09-22T21:00:00.000Z");
   assert.equal(body.expiresAt, "2026-09-22T03:15:00.000Z");
   assert.equal(store.sessions.has(hashToken(body.sessionToken)), true);
   assert.equal(store.refreshes.has(hashToken(body.refreshToken)), true);
@@ -94,8 +95,29 @@ test("무료 로그인은 AppTransaction이 없어도 성공한다", async () =>
   await handler(appRequest(signInBody({ storeKitProof: undefined })), res);
 
   assert.equal(res.statusCode, 200);
-  assert.equal(JSON.parse(res.body).tier, "free");
+  const body = JSON.parse(res.body);
+  assert.equal(body.tier, "free");
+  assert.equal(body.remainingToday, 2);
+  assert.equal(body.resetAt, "2026-09-22T21:00:00.000Z");
   assert.equal(storeKitCalls, 0);
+});
+
+test("무료와 Pro 세션은 오전 6시부터 새 사용량과 다음 초기화 시각을 반환한다", async () => {
+  for (const [tier, limit] of [["free", 2], ["pro", 100]]) {
+    const store = new MemoryStore();
+    store.usage.set("subject-1:2026-09-21", limit);
+    for (const [instant, remainingToday, resetAt] of [
+      ["2026-09-21T15:00:00.000Z", 0, "2026-09-21T21:00:00.000Z"],
+      ["2026-09-21T20:59:59.999Z", 0, "2026-09-21T21:00:00.000Z"],
+      ["2026-09-21T21:00:00.000Z", limit, "2026-09-22T21:00:00.000Z"],
+    ]) {
+      const session = await issueSession({
+        clock: () => new Date(instant), store, subject: "subject-1", tier,
+      });
+      assert.equal(session.remainingToday, remainingToday);
+      assert.equal(session.resetAt, resetAt);
+    }
+  }
 });
 
 test("동일 거래 ID도 Production과 Sandbox는 별도 계정 바인딩을 사용한다", async () => {

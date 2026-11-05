@@ -2,7 +2,7 @@ import { HttpError } from "./errors.js";
 
 const ALLOWED_MODELS = new Set(["gemini-3.6-flash"]);
 const EXPECTED_BUNDLE_ID = "com.hyeseong.Paxo";
-const TIER_LIMITS = { free: 3, pro: 100 };
+const TIER_LIMITS = { free: 2, pro: 100 };
 const REQUIRED_KEYS = [
   "GEMINI_API_KEY",
   "APP_TOKEN",

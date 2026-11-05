@@ -85,6 +85,43 @@ struct ProxySessionManagerTests {
         #expect(trackingLoader.callCount == 2)
     }
 
+    @Test("초기화 직전까지 캐시를 쓰고 오전 6시부터 서버 사용량을 한 번만 갱신한다", arguments: [0.0, 1.0])
+    func refreshesUsageAtResetBoundary(secondsAfterReset: TimeInterval) async throws {
+        let resetAt = try #require(ISO8601DateFormatter().date(from: "2026-11-04T21:00:00Z"))
+        var now = resetAt.addingTimeInterval(-1)
+        var requestCount = 0
+        let loader = StubLoader { request in
+            requestCount += 1
+            return try sessionResponse(
+                request: request,
+                remainingToday: requestCount == 1 ? 0 : 2,
+                resetAt: requestCount == 1 ? "2026-11-04T21:00:00.000Z" : "2026-11-05T21:00:00.000Z"
+            )
+        }
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil),
+            credentialStore: StubCredentialStore(value: "old-refresh-token"),
+            loader: loader,
+            clock: { now }
+        )
+
+        _ = try await manager.session()
+        now = resetAt.addingTimeInterval(-0.001)
+        let beforeReset = try await manager.session()
+        #expect(beforeReset.remainingToday == 0)
+        #expect(loader.callCount == 1)
+
+        now = resetAt.addingTimeInterval(secondsAfterReset)
+        async let first = manager.session()
+        async let second = manager.session()
+        let refreshed = try await (first, second)
+
+        #expect(refreshed.0.remainingToday == 2)
+        #expect(refreshed.1.remainingToday == 2)
+        #expect(refreshed.0.resetAt == resetAt.addingTimeInterval(24 * 60 * 60))
+        #expect(loader.callCount == 2)
+    }
+
     @Test("갱신 토큰이 없으면 네트워크 요청 전에 로그인을 요구한다")
     func requiresSignInBeforeNetworkRequest() async {
         let loader = StubLoader { request in
@@ -190,7 +227,8 @@ private final class SequencedSessionLoader: HTTPDataLoading {
 
 private func sessionResponse(
     request: URLRequest,
-    remainingToday: Int = 2
+    remainingToday: Int = 2,
+    resetAt: String = "2030-01-01T21:00:00.000Z"
 ) throws -> (Data, URLResponse) {
     try response(
         request: request,
@@ -200,7 +238,7 @@ private func sessionResponse(
               "expiresAt":"2030-01-01T00:00:00.000Z",
               "refreshToken":"refresh-token",
               "remainingToday":\(remainingToday),
-              "resetAt":"2030-01-01T15:00:00.000Z",
+              "resetAt":"\(resetAt)",
               "sessionToken":"opaque-token",
               "tier":"free"
             }

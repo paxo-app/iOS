@@ -77,6 +77,9 @@ struct MenuContentView: View {
                         .foregroundStyle(.tint)
                     }
                 }
+                Text(UsagePolicy.dailyResetNotice)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             } else {
                 if appState.authenticationPhase == .preparing
                     || appState.authenticationPhase == .signingIn
