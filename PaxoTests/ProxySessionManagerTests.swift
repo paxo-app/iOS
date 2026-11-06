@@ -43,6 +43,8 @@ struct ProxySessionManagerTests {
 
         #expect(session.sessionToken == "opaque-token")
         #expect(session.remainingToday == 2)
+        #expect(session.creditBalance == 100)
+        #expect(session.appAccountToken?.uuidString == "00000000-0000-4000-8000-000000000001")
         #expect(credentials.value == "refresh-token")
         #expect(loader.callCount == 2)
     }
@@ -180,6 +182,179 @@ struct ProxySessionManagerTests {
         #expect(loader.callCount == 2)
         #expect(token == "opaque-token")
     }
+
+    @Test("구매 적립에 로그인 세션과 거래 증명을 전달하고 기존 잔액 캐시를 버린다")
+    func redeemsPurchaseWithAuthenticatedProof() async throws {
+        var purchaseCalls = 0
+        let loader = StubLoader { request in
+            if request.url?.path == "/purchases" {
+                purchaseCalls += 1
+                #expect(request.httpMethod == "POST")
+                #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer opaque-token")
+                #expect(request.value(forHTTPHeaderField: "x-paxo-token") != nil)
+                let data = try #require(request.httpBody)
+                let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: String])
+                #expect(body == ["signedTransactionInfo": "header.payload.signature"])
+                return try response(
+                    request: request, status: 200,
+                    body: #"{"creditBalance":130,"creditRevision":2,"storeEnvironment":"Production"}"#)
+            }
+            let data = try #require(request.httpBody)
+            let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let proof = try #require(body["storeKitProof"] as? [String: String])
+            #expect(proof == ["type": "transaction", "jws": "header.payload.signature"])
+            return try sessionResponse(request: request)
+        }
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil),
+            credentialStore: StubCredentialStore(value: "refresh-token"),
+            loader: loader
+        )
+
+        let balance = try await manager.redeemPurchase(signedTransactionInfo: "header.payload.signature")
+
+        #expect(balance == CreditBalance(creditBalance: 130, creditRevision: 2))
+        #expect(purchaseCalls == 1)
+        #expect(manager.sessionSnapshot == nil)
+    }
+
+    @Test("구매 적립 중 세션 만료는 한 번만 갱신해 같은 거래를 재전송한다")
+    func retriesPurchaseAfterSessionExpiry() async throws {
+        var purchaseCalls = 0
+        var refreshCalls = 0
+        let loader = StubLoader { request in
+            if request.url?.path == "/purchases" {
+                purchaseCalls += 1
+                return try response(
+                    request: request,
+                    status: purchaseCalls == 1 ? 401 : 200,
+                    body: purchaseCalls == 1
+                        ? #"{"error":{"code":"invalid_session"}}"#
+                        : #"{"creditBalance":30,"creditRevision":2,"storeEnvironment":"Production"}"#
+                )
+            }
+            refreshCalls += 1
+            return try sessionResponse(request: request)
+        }
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil),
+            credentialStore: StubCredentialStore(value: "refresh-token"),
+            loader: loader
+        )
+
+        let balance = try await manager.redeemPurchase(signedTransactionInfo: "header.payload.signature")
+
+        #expect(balance == CreditBalance(creditBalance: 30, creditRevision: 2))
+        #expect(purchaseCalls == 2)
+        #expect(refreshCalls == 2)
+    }
+
+    @Test("다른 계정의 거래는 재시도하지 않고 거절한다")
+    func rejectsPurchaseAccountMismatch() async {
+        var purchaseCalls = 0
+        let loader = StubLoader { request in
+            if request.url?.path == "/purchases" {
+                purchaseCalls += 1
+                return try response(
+                    request: request, status: 409, body: #"{"error":{"code":"purchase_account_mismatch"}}"#)
+            }
+            return try sessionResponse(request: request)
+        }
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil),
+            credentialStore: StubCredentialStore(value: "refresh-token"),
+            loader: loader
+        )
+
+        do {
+            _ = try await manager.redeemPurchase(signedTransactionInfo: "header.payload.signature")
+            Issue.record("다른 계정 거래가 승인됨")
+        } catch ProxySessionError.storeKitAccountMismatch {
+            #expect(purchaseCalls == 1)
+        } catch {
+            Issue.record("예상하지 않은 오류")
+        }
+    }
+
+    @Test("로그아웃 뒤 늦게 도착한 세션 갱신은 토큰을 다시 저장하지 않는다")
+    func doesNotRestoreCredentialsFromCancelledRefresh() async throws {
+        let credentials = StubCredentialStore(value: "old-refresh-token")
+        let loader = DeferredLoader(path: "/session/refresh")
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil), credentialStore: credentials, loader: loader
+        )
+        let request = Task { try await manager.session() }
+        await loader.waitForRequest()
+
+        manager.clearCredentials()
+        try loader.respondWithSession()
+
+        await #expect(throws: ProxySessionError.self) { _ = try await request.value }
+        #expect(credentials.value == nil)
+        #expect(manager.sessionSnapshot == nil)
+    }
+
+    @Test("로그아웃 중 완료된 적립 응답은 이전 계정의 잔액으로 반환하지 않는다")
+    func discardsPurchaseResponseAfterSignOut() async throws {
+        let credentials = StubCredentialStore(value: "old-refresh-token")
+        let loader = DeferredLoader(path: "/purchases")
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil), credentialStore: credentials, loader: loader
+        )
+        let request = Task { try await manager.redeemPurchase(signedTransactionInfo: "signed-purchase") }
+        await loader.waitForRequest()
+
+        manager.clearCredentials()
+        try loader.respond(body: #"{"creditBalance":130,"creditRevision":2,"storeEnvironment":"Production"}"#)
+
+        await #expect(throws: ProxySessionError.self) { _ = try await request.value }
+        #expect(credentials.value == nil)
+        #expect(manager.sessionSnapshot == nil)
+    }
+
+    @Test("이전 계정의 갱신 실패 응답이 새 계정의 자격 증명을 지우지 않는다")
+    func ignoresOldAuthenticationFailureAfterAccountSwitch() async throws {
+        let credentials = StubCredentialStore(value: "old-refresh-token")
+        let loader = DeferredLoader(path: "/session/refresh")
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil), credentialStore: credentials, loader: loader
+        )
+        let request = Task { try await manager.session() }
+        await loader.waitForRequest()
+
+        manager.clearCredentials()
+        credentials.saveRefreshToken("new-account-refresh-token")
+        try loader.respond(status: 401, body: #"{"error":{"code":"invalid_refresh"}}"#)
+
+        await #expect(throws: ProxySessionError.self) { _ = try await request.value }
+        #expect(credentials.value == "new-account-refresh-token")
+    }
+
+    @Test("일반 갱신이 진행 중이어도 충전 거래 증명으로 환경을 다시 확인한다")
+    func refreshesWithPurchaseProofAfterUnrelatedRefresh() async throws {
+        let loader = DeferredLoader(path: "/session/refresh")
+        let manager = ProxySessionManager(
+            proofProvider: StubProof(value: nil),
+            credentialStore: StubCredentialStore(value: "refresh-token"),
+            loader: loader
+        )
+        let regular = Task { try await manager.session() }
+        await loader.waitForRequest()
+        let proof = StoreKitProof(jws: "signed-consumable", type: .transaction)
+        let purchase = Task { try await manager.session(forceRefresh: true, storeKitProof: proof) }
+        try loader.respondWithSession()
+        _ = try await regular.value
+        await loader.waitForRequest()
+        let request = try #require(loader.lastRequest)
+        let body = try #require(request.httpBody)
+        let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let sentProof = try #require(object["storeKitProof"] as? [String: String])
+        #expect(sentProof == ["type": "transaction", "jws": "signed-consumable"])
+        try loader.respondWithSession()
+
+        _ = try await purchase.value
+    }
+
 }
 
 private struct StubProof: StoreKitProofProviding {
@@ -238,6 +413,10 @@ private func sessionResponse(
               "expiresAt":"2030-01-01T00:00:00.000Z",
               "refreshToken":"refresh-token",
               "remainingToday":\(remainingToday),
+              "creditBalance":100,
+              "creditRevision":1,
+              "storeEnvironment":"Production",
+              "appAccountToken":"00000000-0000-4000-8000-000000000001",
               "resetAt":"\(resetAt)",
               "sessionToken":"opaque-token",
               "tier":"free"
@@ -252,4 +431,44 @@ private func response(request: URLRequest, status: Int, body: String) throws -> 
         HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)
     )
     return (Data(body.utf8), value)
+}
+
+@MainActor
+private final class DeferredLoader: HTTPDataLoading {
+    private let path: String
+    private var request: URLRequest?
+    var lastRequest: URLRequest? { request }
+    private var responseContinuation: CheckedContinuation<(Data, URLResponse), Error>?
+    private var requestContinuation: CheckedContinuation<Void, Never>?
+
+    init(path: String) { self.path = path }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        guard request.url?.path == path else { return try sessionResponse(request: request) }
+        self.request = request
+        return try await withCheckedThrowingContinuation { continuation in
+            responseContinuation = continuation
+            requestContinuation?.resume()
+            requestContinuation = nil
+        }
+    }
+
+    func waitForRequest() async {
+        guard responseContinuation == nil else { return }
+        await withCheckedContinuation { requestContinuation = $0 }
+    }
+
+    func respondWithSession() throws {
+        let request = try #require(request)
+        let result = try sessionResponse(request: request)
+        responseContinuation?.resume(returning: result)
+        responseContinuation = nil
+    }
+
+    func respond(status: Int = 200, body: String) throws {
+        let request = try #require(request)
+        let result = try response(request: request, status: status, body: body)
+        responseContinuation?.resume(returning: result)
+        responseContinuation = nil
+    }
 }

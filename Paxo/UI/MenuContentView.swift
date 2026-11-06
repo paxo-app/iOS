@@ -18,9 +18,6 @@ struct MenuContentView: View {
             }
         }
         .onAppear { appState.refreshFreeRemaining() }
-        .onChange(of: appState.serverTier) {
-            if appState.serverTier != .pro { showsDetail = false }
-        }
         .onChange(of: appState.current?.id) {
             if appState.current == nil { showsDetail = false }
         }
@@ -56,26 +53,26 @@ struct MenuContentView: View {
                     .foregroundStyle(.secondary)
 
                 if appState.serverTier == .pro {
-                    Label(
-                        "Paxo Pro · 오늘 \(appState.remainingToday)회 남음",
-                        systemImage: "checkmark.seal.fill"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                } else {
-                    HStack {
-                        Text("오늘 무료 풀이 \(appState.remainingToday)회 남음")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Pro 알아보기") {
-                            dismiss()
-                            appState.showPaywall()
-                        }
-                        .buttonStyle(.plain)
+                    Label("기존 구독 · 오늘 \(appState.remainingToday)회 남음", systemImage: "checkmark.seal.fill")
                         .font(.caption)
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("오늘 무료 풀이 \(appState.remainingToday)회 남음")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Label("보유 풀이권 \(appState.creditBalance.formatted())회", systemImage: "ticket")
+                        .font(.caption)
+                        .monospacedDigit()
+                    Spacer()
+                    Button("충전하기") {
+                        dismiss()
+                        appState.showPaywall()
                     }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.tint)
                 }
                 Text(UsagePolicy.dailyResetNotice)
                     .font(.caption2)
@@ -144,13 +141,9 @@ struct MenuContentView: View {
                                 270)
                     )
                     if appState.visibleHistory.count > appState.recentHistory.count {
-                        Text(
-                            appState.serverTier == .pro
-                                ? "전체 \(appState.visibleHistory.count)개는 설정의 풀이 기록 탭에서 볼 수 있습니다."
-                                : "무료 플랜의 최신 \(appState.visibleHistory.count)개는 설정의 풀이 기록 탭에서 볼 수 있습니다."
-                        )
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        Text("전체 \(appState.visibleHistory.count)개는 설정의 풀이 기록 탭에서 볼 수 있습니다.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

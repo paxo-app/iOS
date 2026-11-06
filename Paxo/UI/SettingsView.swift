@@ -22,9 +22,6 @@ struct SettingsView: View {
         .onChange(of: appState.recentHistoryLimit) {
             recentHistoryLimitText = String(min(appState.recentHistoryLimit, appState.historyDisplayLimit))
         }
-        .onChange(of: appState.serverTier) {
-            recentHistoryLimitText = String(min(appState.recentHistoryLimit, appState.historyDisplayLimit))
-        }
         .onChange(of: appState.resultFontSize) {
             if selectedResultFontSize != appState.resultFontSize {
                 selectedResultFontSize = appState.resultFontSize
@@ -153,13 +150,9 @@ struct SettingsView: View {
                         .onDisappear { saveRecentHistoryLimit() }
                 }
                 .disabled(!appState.showsRecentHistory)
-                Text(
-                    appState.serverTier == .pro
-                        ? "메뉴에는 최신 풀이를 설정한 개수만큼 표시합니다. 전체 100개는 풀이 기록 탭에서 볼 수 있습니다."
-                        : "메뉴와 풀이 기록에서는 최신 10개까지 볼 수 있습니다. 이전 기록은 삭제되지 않으며 Pro에서 다시 볼 수 있습니다."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("메뉴에는 최신 풀이를 설정한 개수만큼 표시합니다. 전체 100개는 풀이 기록 탭에서 볼 수 있습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("캡처") {
@@ -193,10 +186,10 @@ struct SettingsView: View {
             }
             #endif
 
-            Section("구독") {
+            Section("풀이권") {
                 if appState.serverTier == .pro {
                     Label(
-                        "Paxo Pro · 오늘 \(appState.remainingToday)회 남음",
+                        "기존 구독 · 오늘 \(appState.remainingToday)회 남음",
                         systemImage: "checkmark.seal.fill"
                     )
                 } else {
@@ -204,19 +197,28 @@ struct SettingsView: View {
                         "무료 사용량",
                         value: "오늘 \(appState.remainingToday)/\(UsagePolicy.dailyFreeLimit)회 남음"
                     )
-                    Button("Paxo Pro 알아보기…") {
-                        appState.showPaywall()
-                    }
                 }
+                LabeledContent("보유 풀이권", value: "\(appState.creditBalance.formatted())회")
+                Button("풀이권 충전…") { appState.showPaywall() }
+                    .disabled(appState.authenticationPhase != .signedIn)
                 Text(UsagePolicy.dailyResetNotice)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button("구매 복원") {
-                    Task { await store.restore() }
-                }
-                Text("구독은 App Store 계정 설정에서 관리·해지할 수 있습니다.")
+                Text("무료 제공량을 먼저 사용하며, 정답 제공에 성공했을 때만 차감합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Button("잔액 새로고침") {
+                    Task { await store.restore() }
+                }
+                .disabled(store.purchaseInFlight || appState.authenticationPhase != .signedIn)
+                if let error = store.errorMessage {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+                if appState.serverTier == .pro {
+                    Text("기존 구독은 App Store 계정 설정에서 관리·해지할 수 있습니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("단축키") {
@@ -272,7 +274,7 @@ struct SettingsView: View {
             }
         } message: {
             Text(
-                "Apple 로그인 연결과 서버의 사용량 정보가 삭제되며 되돌릴 수 없습니다. 기기의 풀이 기록과 문제 이미지는 유지됩니다. 로컬 데이터는 설정의 풀이 기록 탭에서 삭제할 수 있습니다."
+                "Apple 로그인 연결, 서버의 사용량 정보와 남은 풀이권이 삭제되며 되돌릴 수 없습니다. 기기의 풀이 기록과 문제 이미지는 유지됩니다. 로컬 데이터는 설정의 풀이 기록 탭에서 삭제할 수 있습니다."
             )
         }
     }

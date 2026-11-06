@@ -53,19 +53,13 @@ struct HistoryArchiveView: View {
                     }
                     HistoryStorageNotice()
                     searchField
-                    if appState.serverTier == .pro {
-                        proControls
-                    }
-                    if let subjectError = appState.subjectError, appState.serverTier == .pro {
+                    groupingControls
+                    if let subjectError = appState.subjectError {
                         Text(subjectError).font(.caption).foregroundStyle(.red)
                     }
-                    Text(
-                        appState.serverTier == .pro
-                            ? "최근 100개의 풀이와 문제 이미지를 이 Mac에서 다시 볼 수 있습니다."
-                            : "무료 플랜에서는 최신 10개를 볼 수 있습니다. 이전 기록은 이 Mac에 보관되며 Pro에서 다시 볼 수 있습니다."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("최근 100개의 풀이와 문제 이미지를 이 Mac에서 다시 볼 수 있습니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     if matchingItems.isEmpty {
                         emptyState
                     } else if selectedDate != nil || selectedSubjectKey != nil {
@@ -78,7 +72,7 @@ struct HistoryArchiveView: View {
                                 showsDetail = true
                             }
                         }
-                    } else if grouping == .subject && appState.serverTier == .pro {
+                    } else if grouping == .subject {
                         subjectList
                     } else {
                         dateList
@@ -91,15 +85,6 @@ struct HistoryArchiveView: View {
         .tint(PaxoStyle.brand)
         .sheet(isPresented: $showsSubjectManager) {
             SubjectManagementView().environmentObject(appState)
-        }
-        .onChange(of: appState.serverTier) {
-            if appState.serverTier != .pro {
-                grouping = .date
-                selectedDate = nil
-                selectedSubjectKey = nil
-                showsDetail = false
-                showsSubjectManager = false
-            }
         }
         .onChange(of: appState.subjectCatalog) {
             if let selectedSubjectKey, selectedSubjectKey != "unclassified",
@@ -147,14 +132,14 @@ struct HistoryArchiveView: View {
             }
             Button("모든 기록 삭제…", role: .destructive) { showsDeleteConfirmation = true }
                 .disabled(appState.isSolving)
-                .help("무료 플랜에서 보이지 않는 기록을 포함해 이 Mac의 모든 풀이 기록을 삭제합니다.")
+                .help("이 Mac에 보관한 모든 풀이 기록을 삭제합니다.")
         }
     }
 
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField(appState.serverTier == .pro ? "정답, 해설, 과목 검색" : "정답, 해설 검색", text: $query)
+            TextField("정답, 해설, 과목 검색", text: $query)
                 .textFieldStyle(.plain)
                 .accessibilityLabel("풀이 기록 검색")
             if !query.isEmpty {
@@ -171,7 +156,7 @@ struct HistoryArchiveView: View {
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private var proControls: some View {
+    private var groupingControls: some View {
         HStack {
             Picker("묶음", selection: $grouping) {
                 Text("날짜별").tag(HistoryGrouping.date)

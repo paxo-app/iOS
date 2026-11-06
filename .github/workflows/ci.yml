@@ -95,6 +95,9 @@ jobs:
       - name: 문법 검사
         run: npm run check
 
+      - name: 잔액 원장 통합 테스트용 Redis 설치
+        run: sudo apt-get update && sudo apt-get install -y redis-server
+
       - name: 단위 테스트
         run: npm test
 

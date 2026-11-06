@@ -2,8 +2,11 @@ import Foundation
 
 struct GenerationResult {
     let answerContext: AnswerContext
+    let creditBalance: Int?
+    let creditRevision: Int?
     let remainingToday: Int?
     let resetAt: Date?
+    let storeEnvironment: String?
     let text: String
     let tier: ProxyTier?
 }
@@ -154,11 +157,8 @@ struct GeminiService {
                 let code = Self.serverCode(from: data)
                 switch (http.statusCode, code) {
                 case (401, _): throw GeminiError.invalidSession
-                case (429, "daily_limit"):
-                    if http.value(forHTTPHeaderField: "x-paxo-tier") == ProxyTier.pro.rawValue {
-                        throw GeminiError.proDailyLimit
-                    }
-                    throw GeminiError.freeDailyLimit
+                case (429, "daily_limit"), (429, "credits_exhausted"):
+                    throw GeminiError.creditsExhausted
                 case (429, _): throw GeminiError.rateLimited
                 case (502, "incomplete_response"): throw GeminiError.incompleteResponse
                 case (502, "invalid_response"): throw GeminiError.invalidResponse
@@ -170,8 +170,11 @@ struct GeminiService {
                 let generated = try GenerationContract.decode(data, kind: kind, expected: expected)
                 return GenerationResult(
                     answerContext: generated.context,
+                    creditBalance: http.value(forHTTPHeaderField: "x-paxo-credit-balance").flatMap(Int.init),
+                    creditRevision: http.value(forHTTPHeaderField: "x-paxo-credit-revision").flatMap(Int.init),
                     remainingToday: http.value(forHTTPHeaderField: "x-paxo-remaining").flatMap(Int.init),
                     resetAt: Self.date(from: http.value(forHTTPHeaderField: "x-paxo-reset-at")),
+                    storeEnvironment: http.value(forHTTPHeaderField: "x-paxo-store-environment"),
                     text: generated.text,
                     tier: http.value(forHTTPHeaderField: "x-paxo-tier").flatMap(ProxyTier.init)
                 )
@@ -223,14 +226,13 @@ private struct ErrorEnvelope: Decodable {
 enum GeminiError: LocalizedError {
     case badURL
     case emptyResponse
-    case freeDailyLimit
+    case creditsExhausted
     case http(Int, String?)
     case invalidSession
     case incompleteResponse
     case invalidResponse
     case missingKey
     case network(URLError)
-    case proDailyLimit
     case rateLimited
     case serviceUnavailable
 
@@ -240,9 +242,9 @@ enum GeminiError: LocalizedError {
             return "AI 연결 설정에 문제가 있습니다. 잠시 후 다시 시도해주세요."
         case .emptyResponse:
             return "AI 응답이 비어 있습니다. 다시 시도해주세요."
-        case .freeDailyLimit:
+        case .creditsExhausted:
             return
-                "무료 풀이 \(UsagePolicy.dailyFreeLimit)회를 모두 사용했습니다. \(UsagePolicy.dailyResetNotice) Pro로 업그레이드하거나 초기화 후 다시 이용해주세요."
+                "사용할 수 있는 풀이 횟수를 모두 사용했습니다. 풀이권을 충전하거나 무료 풀이 초기화 후 다시 이용해주세요. \(UsagePolicy.dailyResetNotice)"
         case .http(let code, let message):
             if let message, !message.isEmpty { return message }
             return "서버 오류가 발생했습니다. (HTTP \(code)) 잠시 후 다시 시도해주세요."
@@ -265,9 +267,6 @@ enum GeminiError: LocalizedError {
             default:
                 return "네트워크 오류가 발생했습니다. 다시 시도해주세요."
             }
-        case .proDailyLimit:
-            return
-                "Pro의 일일 안전 한도 \(UsagePolicy.dailyProLimit)회를 모두 사용했습니다. \(UsagePolicy.dailyResetNotice) 초기화 후 다시 이용해주세요."
         case .rateLimited:
             return "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
         case .serviceUnavailable:

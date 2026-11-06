@@ -1,95 +1,75 @@
 {
-  "identifier" : "A1B2C3D4",
-  "nonRenewingSubscriptions" : [
-
-  ],
-  "products" : [
-
-  ],
-  "settings" : {
-
-  },
-  "subscriptionGroups" : [
+  "identifier": "A1B2C3D4",
+  "nonRenewingSubscriptions": [],
+  "products": [
     {
-      "id" : "20250720",
-      "localizations" : [
-
-      ],
-      "name" : "Paxo Pro",
-      "subscriptions" : [
+      "displayPrice": "990",
+      "familyShareable": false,
+      "internalID": "PAXOCREDITS0030",
+      "localizations": [
         {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "4.99",
-          "familyShareable" : false,
-          "groupNumber" : 1,
-          "internalID" : "A1B2C3D4E5F60001",
-          "introductoryOffer" : {
-            "internalID" : "A1B2C3D4E5F60011",
-            "paymentMode" : "free",
-            "subscriptionPeriod" : "P3D"
-          },
-          "localizations" : [
-            {
-              "description" : "Up to 100 AI solutions and explanations per day",
-              "displayName" : "Paxo Pro Monthly",
-              "locale" : "en_US"
-            },
-            {
-              "description" : "하루 최대 100회 AI 풀이 및 해설",
-              "displayName" : "Paxo Pro 월간",
-              "locale" : "ko_KR"
-            }
-          ],
-          "productID" : "com.hyeseong.Paxo.pro.monthly",
-          "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Pro Monthly",
-          "subscriptionGroupID" : "20250720",
-          "type" : "RecurringSubscription"
-        },
-        {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "39.99",
-          "familyShareable" : false,
-          "groupNumber" : 1,
-          "internalID" : "A1B2C3D4E5F60002",
-          "introductoryOffer" : {
-            "internalID" : "A1B2C3D4E5F60012",
-            "paymentMode" : "free",
-            "subscriptionPeriod" : "P3D"
-          },
-          "localizations" : [
-            {
-              "description" : "Up to 100 AI solutions and explanations per day",
-              "displayName" : "Paxo Pro Yearly",
-              "locale" : "en_US"
-            },
-            {
-              "description" : "하루 최대 100회 AI 풀이 및 해설",
-              "displayName" : "Paxo Pro 연간",
-              "locale" : "ko_KR"
-            }
-          ],
-          "productID" : "com.hyeseong.Paxo.pro.yearly",
-          "recurringSubscriptionPeriod" : "P1Y",
-          "referenceName" : "Pro Yearly",
-          "subscriptionGroupID" : "20250720",
-          "type" : "RecurringSubscription"
+          "description": "정답과 해설을 포함한 풀이권 30회. 유효기간 없이 사용할 수 있습니다.",
+          "displayName": "풀이권 30회",
+          "locale": "ko_KR"
         }
-      ]
+      ],
+      "productID": "com.hyeseong.Paxo.credits.30",
+      "referenceName": "풀이권 30회",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "2900",
+      "familyShareable": false,
+      "internalID": "PAXOCREDITS0100",
+      "localizations": [
+        {
+          "description": "정답과 해설을 포함한 풀이권 100회. 유효기간 없이 사용할 수 있습니다.",
+          "displayName": "풀이권 100회",
+          "locale": "ko_KR"
+        }
+      ],
+      "productID": "com.hyeseong.Paxo.credits.100",
+      "referenceName": "풀이권 100회",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "13900",
+      "familyShareable": false,
+      "internalID": "PAXOCREDITS0500",
+      "localizations": [
+        {
+          "description": "정답과 해설을 포함한 풀이권 500회. 유효기간 없이 사용할 수 있습니다.",
+          "displayName": "풀이권 500회",
+          "locale": "ko_KR"
+        }
+      ],
+      "productID": "com.hyeseong.Paxo.credits.500",
+      "referenceName": "풀이권 500회",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "26900",
+      "familyShareable": false,
+      "internalID": "PAXOCREDITS1000",
+      "localizations": [
+        {
+          "description": "정답과 해설을 포함한 풀이권 1,000회. 유효기간 없이 사용할 수 있습니다.",
+          "displayName": "풀이권 1,000회",
+          "locale": "ko_KR"
+        }
+      ],
+      "productID": "com.hyeseong.Paxo.credits.1000",
+      "referenceName": "풀이권 1,000회",
+      "type": "Consumable"
     }
   ],
-  "version" : {
-    "major" : 3,
-    "minor" : 0
+  "settings": {
+    "_locale": "ko_KR",
+    "_storefront": "KOR"
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 3,
+    "minor": 0
   }
 }

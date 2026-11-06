@@ -14,7 +14,7 @@ enum DefaultConfig {
     /// 개인정보 처리방침 (프록시 워커가 /privacy 경로로 서빙)
     static let privacyPolicyURL = proxyURL + "/privacy"
 
-    /// 구매 전에 디지털 서비스의 제공 방식과 구독 조건을 확인할 수 있게 한다.
+    /// 구매 전에 풀이권의 제공 방식과 사용 조건을 확인할 수 있게 한다.
     static let serviceGuideURL = proxyURL + "/service"
 
     /// 이용약관 — Apple 표준 EULA

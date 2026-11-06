@@ -47,6 +47,11 @@ function hashSubject(identifier, secret) {
   return createHmac("sha256", secret).update(identifier).digest("hex");
 }
 
+function appAccountToken(subject) {
+  const hex = sha256(`paxo-purchase-account:${subject}`);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -97,6 +102,7 @@ const hashSessionToken = hashToken;
 const newSessionToken = newOpaqueToken;
 
 export {
+  appAccountToken,
   bearerToken,
   decryptSecret,
   encryptSecret,

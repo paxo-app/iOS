@@ -89,9 +89,6 @@ struct ResultView: View {
                     .environmentObject(appState)
             }
         }
-        .onChange(of: appState.serverTier) {
-            if appState.serverTier != .pro { showsSubjectPicker = false }
-        }
     }
 
     private var isSolving: Bool {
@@ -140,7 +137,7 @@ struct ResultView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                if isHistory && appState.serverTier == .pro {
+                if isHistory {
                     Button {
                         showsSubjectPicker = true
                     } label: {

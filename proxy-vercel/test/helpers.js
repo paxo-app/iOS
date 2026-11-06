@@ -1,4 +1,4 @@
-import { hashSessionToken } from "../lib/security.js";
+import { appAccountToken, hashSessionToken } from "../lib/security.js";
 
 const SOLVE_ID = "11111111-2222-4333-8444-555555555555";
 
@@ -73,6 +73,12 @@ function generateBody(kind = "answer", solveId = SOLVE_ID) {
 
 class MemoryStore {
   constructor() {
+    this.revisions = new Map();
+    this.epochs = new Map();
+    this.nextEpoch = 0;
+    this.wallets = new Map();
+    this.purchases = new Map();
+    this.creditReservations = new Set();
     this.answers = new Set();
     this.answerReservations = new Set();
     this.explanations = new Set();
@@ -142,6 +148,12 @@ class MemoryStore {
 
   async deleteSubject(subject) {
     this.accounts.delete(subject);
+    for (const environment of ["Production", "Sandbox"]) {
+      const wallet = `${environment}:${appAccountToken(subject)}`;
+      this.wallets.delete(wallet);
+      this.epochs.delete(wallet);
+      this.revisions.delete(wallet);
+    }
     for (const [key, value] of this.sessions) {
       if (value.subject === subject) this.sessions.delete(key);
     }
@@ -161,6 +173,44 @@ class MemoryStore {
     this.tiers.set(subject, tier);
   }
 
+  async getCreditSnapshot(subject, storeEnvironment = "Production") {
+    const owner = `${storeEnvironment}:${appAccountToken(subject)}`;
+    return { creditBalance: Math.max(0, this.wallets.get(owner) || 0), creditRevision: this.revisions.get(owner) || 0, storeEnvironment };
+  }
+
+  async getCreditBalance(subject, storeEnvironment = "Production") {
+    return (await this.getCreditSnapshot(subject, storeEnvironment)).creditBalance;
+  }
+
+  async applyPurchase(subject, transactionHash, purchase) {
+    return this.reconcilePurchase(transactionHash, purchase, subject);
+  }
+
+  async reconcilePurchase(transactionHash, purchase, subject) {
+    if (subject && !this.accounts.has(subject)) return { status: -3 };
+    const owner = purchase.appAccountToken;
+    const wallet = `${purchase.environment}:${owner}`;
+    const record = this.purchases.get(transactionHash) || { owner, credits: purchase.credits, version: 0, granted: false, revoked: false };
+    if (record.owner !== owner) return { status: -1 };
+    if (record.version > purchase.signedDate) return { status: 0 };
+    if (record.granted) {
+      if (this.epochs.get(wallet) === record.epoch && record.revoked !== purchase.revoked) {
+        this.wallets.set(wallet, (this.wallets.get(wallet) || 0) + (purchase.revoked ? -record.credits : record.credits));
+        this.revisions.set(wallet, (this.revisions.get(wallet) || 0) + 1);
+      }
+    } else if (subject && !purchase.revoked) {
+      if (!this.epochs.has(wallet)) this.epochs.set(wallet, ++this.nextEpoch);
+      record.epoch = this.epochs.get(wallet);
+      this.wallets.set(wallet, (this.wallets.get(wallet) || 0) + record.credits);
+      this.revisions.set(wallet, (this.revisions.get(wallet) || 0) + 1);
+      record.granted = true;
+    }
+    record.revoked = purchase.revoked;
+    record.version = purchase.signedDate;
+    this.purchases.set(transactionHash, record);
+    return { status: 1 };
+  }
+
   async getUsage(subject, day) {
     return this.usage.get(`${subject}:${day}`) || 0;
   }
@@ -169,31 +219,50 @@ class MemoryStore {
     return this.burstAllowed;
   }
 
-  async reserveAnswer(subject, day, solveId, limit) {
+  async reserveAnswer(subject, day, solveId, limit, now, environment = "Production") {
+    const wallet = `${environment}:${appAccountToken(subject)}`;
     const doneKey = `${subject}:${solveId}`;
     const pendingKey = `${subject}:${day}:${solveId}`;
-    if (this.answers.has(doneKey) || this.answerReservations.has(pendingKey)) {
+    if (this.answers.has(doneKey) || [...this.answerReservations, ...this.creditReservations]
+      .some((key) => key.startsWith(`${subject}:`) && key.endsWith(`:${solveId}`))) {
       return { allowed: false, reason: "duplicate" };
     }
-    const used = await this.getUsage(subject, day);
+    const used = this.usage.get(`${subject}:${day}`) || 0;
     const pending = [...this.answerReservations].filter((key) => key.startsWith(`${subject}:${day}:`));
-    if (used + pending.length >= limit) return { allowed: false, reason: "daily_limit" };
-    this.answerReservations.add(pendingKey);
+    if (used + pending.length >= limit) {
+      const creditPending = [...this.creditReservations].filter((key) => key.startsWith(`${subject}:`)).length;
+      if ((this.wallets.get(wallet) || 0) <= creditPending) return { allowed: false, reason: used < limit || (this.wallets.get(wallet) || 0) > 0 ? "in_flight" : "daily_limit" };
+      this.creditReservations.add(pendingKey);
+    } else {
+      this.answerReservations.add(pendingKey);
+    }
     return { allowed: true, reason: "ok" };
   }
 
-  async finalizeAnswer(subject, day, solveId, limit) {
+  async finalizeAnswer(subject, day, solveId, limit, reservationId, environment = "Production") {
     const pendingKey = `${subject}:${day}:${solveId}`;
-    if (!this.answerReservations.delete(pendingKey)) throw new Error("reservation missing");
+    const daily = this.answerReservations.delete(pendingKey);
+    const credit = this.creditReservations.delete(pendingKey);
+    if (!daily && !credit) throw new Error("reservation missing");
     const usageKey = `${subject}:${day}`;
-    const used = (this.usage.get(usageKey) || 0) + 1;
-    this.usage.set(usageKey, used);
+    let used = this.usage.get(usageKey) || 0;
+    const pending = [...this.answerReservations].filter((key) => key.startsWith(`${subject}:${day}:`)).length;
+    if (daily || used + pending < limit) {
+      used += 1;
+      this.usage.set(usageKey, used);
+    } else {
+      const owner = `${environment}:${appAccountToken(subject)}`;
+      if ((this.wallets.get(owner) || 0) <= 0) throw new Error("balance unavailable");
+      this.wallets.set(owner, this.wallets.get(owner) - 1);
+      this.revisions.set(owner, (this.revisions.get(owner) || 0) + 1);
+    }
     this.answers.add(`${subject}:${solveId}`);
-    return Math.max(0, limit - used);
+    return { remainingToday: Math.max(0, limit - used), ...await this.getCreditSnapshot(subject, environment) };
   }
 
   async releaseAnswer(subject, day, solveId) {
     this.answerReservations.delete(`${subject}:${day}:${solveId}`);
+    this.creditReservations.delete(`${subject}:${day}:${solveId}`);
   }
 
   async reserveExplanation(subject, solveId) {
@@ -206,10 +275,11 @@ class MemoryStore {
     return { allowed: true, reason: "ok" };
   }
 
-  async finalizeExplanation(subject, solveId) {
+  async finalizeExplanation(subject, solveId, day, limit, environment = "Production") {
     const key = `${subject}:${solveId}`;
     if (!this.explanationReservations.delete(key)) throw new Error("reservation missing");
     this.explanations.add(key);
+    return { remainingToday: Math.max(0, limit - await this.getUsage(subject, day)), ...await this.getCreditSnapshot(subject, environment) };
   }
 
   async releaseExplanation(subject, solveId) {

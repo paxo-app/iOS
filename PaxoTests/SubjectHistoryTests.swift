@@ -55,7 +55,7 @@ struct SubjectHistoryTests {
         #expect(try store.load(migrating: []).subject(for: resultID) == nil)
     }
 
-    @Test func freeVisibilityAndSearchCannotExposeOlderSubjects() throws {
+    @Test func historyAndSubjectSearchRemainAvailableWithoutSubscription() throws {
         let items = (0..<12).map { offset -> SolveResult in
             var result = SolveResult(preset: .general)
             result.date = Date(timeIntervalSince1970: TimeInterval(12 - offset))
@@ -67,32 +67,28 @@ struct SubjectHistoryTests {
         let subjectID = try #require(catalog.subjects.first?.id)
         try catalog.assign(subjectID, to: items[11].id)
 
-        #expect(HistoryBrowser.visible(items.reversed(), tier: .free).map(\.id) == items.prefix(10).map(\.id))
-        #expect(HistoryBrowser.visible(items, tier: .free).count == 10)
-        #expect(HistoryBrowser.visible(items, tier: .pro).count == 12)
-        #expect(HistoryBrowser.recent(items, tier: .free, requestedCount: 100).count == 10)
-        #expect(HistoryBrowser.recent(items, tier: .pro, requestedCount: 5).count == 5)
-        let freeMatches = HistoryBrowser.filter(HistoryBrowser.visible(items, tier: .free), query: "수학")
-        #expect(freeMatches.isEmpty)
-        let proMatches = HistoryBrowser.filter(
-            items, query: "수학",
+        #expect(HistoryBrowser.visible(items.reversed()).map(\.id) == items.map(\.id))
+        #expect(HistoryBrowser.recent(items, requestedCount: 100).count == 12)
+        #expect(HistoryBrowser.recent(items, requestedCount: 5).count == 5)
+        let matches = HistoryBrowser.filter(
+            HistoryBrowser.visible(items), query: "수학",
             subjectName: { id in
                 catalog.subject(for: id)?.name
             })
-        #expect(proMatches.map(\.id) == [items[11].id])
+        #expect(matches.map(\.id) == [items[11].id])
     }
 
-    @Test func downgradeClosesOnlyHistoryOutsideFreeRange() {
+    @Test func closesHistoryOnlyAfterItsRecordIsRemoved() {
         let items = (0..<12).map { offset -> SolveResult in
             var result = SolveResult(preset: .general)
             result.date = Date(timeIntervalSince1970: TimeInterval(12 - offset))
             return result
         }
 
-        #expect(!HistoryBrowser.shouldClose(activeResultID: nil, items: items, tier: .free))
-        #expect(!HistoryBrowser.shouldClose(activeResultID: items[11].id, items: items, tier: .pro))
-        #expect(HistoryBrowser.shouldClose(activeResultID: items[11].id, items: items, tier: .free))
-        #expect(!HistoryBrowser.shouldClose(activeResultID: items[0].id, items: items, tier: .free))
+        #expect(!HistoryBrowser.shouldClose(activeResultID: nil, items: items))
+        #expect(!HistoryBrowser.shouldClose(activeResultID: items[11].id, items: items))
+        #expect(HistoryBrowser.shouldClose(activeResultID: items[11].id, items: Array(items.prefix(11))))
+        #expect(!HistoryBrowser.shouldClose(activeResultID: items[0].id, items: items))
     }
 
     @Test func groupingAndSubjectDeletionKeepRecordsAndImages() throws {

@@ -4,6 +4,8 @@
     "api/*.js": { "includeFiles": "certs/**", "maxDuration": 60 }
   },
   "rewrites": [
+    { "source": "/purchases", "destination": "/api/purchases" },
+    { "source": "/store/notifications", "destination": "/api/store-notifications" },
     { "source": "/generate", "destination": "/api/generate" },
     { "source": "/session", "destination": "/api/session" },
     { "source": "/session/challenge", "destination": "/api/session-challenge" },

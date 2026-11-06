@@ -5,7 +5,7 @@ import { asHttpError, HttpError } from "../lib/errors.js";
 import { sendError } from "../lib/http.js";
 import { createRedisStore } from "../lib/redis-store.js";
 import { encryptSecret, hashSubject, requireAppToken, sha256 } from "../lib/security.js";
-import { issueSession, parseSessionBody, resolveTier } from "../lib/session-service.js";
+import { issueSession, parseSessionBody, resolveStoreContext } from "../lib/session-service.js";
 
 function createSessionHandler(dependencies = {}) {
   const configLoader = dependencies.configLoader || loadConfig;
@@ -31,7 +31,7 @@ function createSessionHandler(dependencies = {}) {
       const subject = hashSubject(`apple:${appleSubject}`, config.identityHashSecret);
       const appleRefreshToken = await appleSignIn.exchangeAuthorizationCode(proof.authorizationCode);
       const appleStore = appleStoreFactory(config);
-      const tier = await resolveTier({
+      const { tier, storeEnvironment } = await resolveStoreContext({
         appleStore,
         config,
         now: clock(),
@@ -43,7 +43,7 @@ function createSessionHandler(dependencies = {}) {
         appleRefreshToken: encryptSecret(appleRefreshToken, config.authTokenEncryptionKey),
         validatedAt: clock().toISOString(),
       });
-      const session = await issueSession({ clock, store, subject, tier, tokenFactory });
+      const session = await issueSession({ clock, store, subject, tier, storeEnvironment, tokenFactory });
 
       console.log(JSON.stringify({ event: "session_issued", subject: subject.slice(0, 12), tier }));
       return res

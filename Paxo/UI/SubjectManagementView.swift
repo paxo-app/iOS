@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Pro 사용자가 로컬 과목을 관리한다.
+/// 과목 분류는 충전 잔량과 관계없이 로컬 기록에서 계속 사용할 수 있다.
 struct SubjectManagementView: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
@@ -54,9 +54,6 @@ struct SubjectManagementView: View {
             Button("취소", role: .cancel) { deletingSubject = nil }
         } message: {
             Text("이 과목의 풀이 기록은 미분류로 이동하며 삭제되지 않습니다.")
-        }
-        .onChange(of: appState.serverTier) {
-            if appState.serverTier != .pro { dismiss() }
         }
     }
 }
@@ -116,9 +113,6 @@ private struct SubjectEditorView: View {
         .padding(20)
         .frame(width: 350)
         .onAppear { name = mode.initialName }
-        .onChange(of: appState.serverTier) {
-            if appState.serverTier != .pro { dismiss() }
-        }
     }
 
     private func save() {
@@ -156,9 +150,6 @@ struct SubjectPickerView: View {
         }
         .padding(20)
         .frame(width: 330, height: 360)
-        .onChange(of: appState.serverTier) {
-            if appState.serverTier != .pro { dismiss() }
-        }
     }
 
     private func select(_ subjectID: UUID?) {
