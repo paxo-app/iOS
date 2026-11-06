@@ -6,6 +6,29 @@ import Testing
 
 @MainActor
 struct StoreManagerTests {
+    @Test("로그인 복구 전에는 미완료 구매 확인 오류를 표시하지 않는다")
+    func defersPendingPurchasesUntilSignedIn() async {
+        var unfinishedQueryCount = 0
+        let manager = StoreManager(
+            productLoader: { [] },
+            unfinishedTransactions: {
+                unfinishedQueryCount += 1
+                return Transaction.unfinished
+            }
+        )
+        var deliveryCount = 0
+        manager.redeemPurchase = { _ in
+            deliveryCount += 1
+            throw ProxySessionError.signInRequired
+        }
+
+        await manager.retryPendingPurchases()
+
+        #expect(deliveryCount == 0)
+        #expect(unfinishedQueryCount == 0)
+        #expect(manager.errorMessage == nil)
+    }
+
     @Test("빈 상품 응답을 로딩 완료 후 오류로 표시한다")
     func reportsEmptyProductResponse() async {
         let manager = StoreManager(productLoader: { [] })

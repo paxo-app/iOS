@@ -40,6 +40,7 @@ final class StoreManager: ObservableObject {
     var refreshBalance: (() async throws -> CreditBalance)?
     var onEntitlementsChanged: (() async -> Void)?
     private let productLoader: () async throws -> [Product]
+    private let unfinishedTransactions: () -> Transaction.Transactions
     private var updatesTask: Task<Void, Never>?
     private var deliveringTransactions: Set<UInt64> = []
     private var hasLoadedEntitlements = false
@@ -49,9 +50,11 @@ final class StoreManager: ObservableObject {
     init(
         productLoader: @escaping () async throws -> [Product] = {
             try await Product.products(for: StoreProducts.identifiers)
-        }
+        },
+        unfinishedTransactions: @escaping () -> Transaction.Transactions = { Transaction.unfinished }
     ) {
         self.productLoader = productLoader
+        self.unfinishedTransactions = unfinishedTransactions
     }
 
     func start() {
@@ -157,7 +160,8 @@ final class StoreManager: ObservableObject {
     }
 
     func retryPendingPurchases() async {
-        for await verification in Transaction.unfinished {
+        guard isSignedIn else { return }
+        for await verification in unfinishedTransactions() {
             await process(verification)
         }
     }
@@ -204,6 +208,7 @@ final class StoreManager: ObservableObject {
     }
 
     private func process(_ verification: VerificationResult<Transaction>) async {
+        guard isSignedIn else { return }
         let revision = accountRevision
         do {
             try await deliver(verification)
