@@ -7,7 +7,7 @@
 | 메뉴바 앱 | `Paxo/` | 전역 단축키 → 화면 캡처 → 프록시 호출 → 결과 표시. (macOS 14+, SwiftUI + AppKit) |
 | API 프록시 | `proxy-vercel/` | 서버에 Gemini API 키를 보관하고 클라이언트 대신 요청을 수행한다. (Vercel iad1 리전) |
 | Gemini API | 외부 | 정답 및 해설 생성. 사용할 모델은 프록시 서버에서 결정한다. |
-| StoreKit 2 · App Store | 외부 | Pro 요금제(월간/연간) 결제 처리 및 구독 상태 검증. |
+| StoreKit 2 · App Store | 외부 | 소모성 풀이권 결제, 서명 거래·환불 검증, 기존 구독 잔여 기간 검증. |
 | Apple 로그인 | 외부 | 사용자 인증. 이름·이메일 권한은 요청하지 않는다. |
 | Upstash Redis | 외부 | 세션, 일일 사용량, 중복 요청 예약을 TTL과 함께 저장한다. |
 
@@ -26,7 +26,7 @@
 ```
 
 - 정답과 해설은 각각 별도의 API 요청으로 처리한다.
-- 무료 2회와 Pro 100회 한도는 매일 오전 6시(Asia/Seoul)를 경계로 서버에서 원자적으로 적용한다. 오전 6시 전 요청은 전날 사용량에 포함하며 남은 횟수는 이월하지 않는다.
+- 무료 2회는 매일 오전 6시(Asia/Seoul)에 초기화한다. 무료분을 먼저 사용하고 충전 풀이권을 차감한다. 충전 잔량에는 만료와 일일 상한이 없다. 기존 구독의 유효 기간에는 일일 100회를 유지한다.
 - 횟수는 '정답 요청'이 성공했을 때만 차감한다. 동일 풀이의 해설 1회는 추가 차감하지 않는다.
 - 토스트 모드에서는 해설을 요청하지 않는다.
 - 정답 · 해설 요청 3초 후부터 취소할 수 있다. 정답 확정 전에 취소하면 무료 횟수를 차감하지 않으며, 취소나 기록 전환 뒤에 도착한 응답은 `SolveRequestGate`가 버린다.
@@ -36,6 +36,9 @@
 핵심 요약만 기재하며, 상세 스펙은 proxy-vercel/AGENTS.md를 정본으로 삼는다.
 
 - 인증 엔드포인트: `POST /session/challenge`, `POST /session`, `POST /session/refresh`
+- 충전 엔드포인트: `POST /purchases`. 로그인 세션과 서명 거래를 검증해 한 번만 적립하며 응답의 `creditBalance`를 반영한 뒤 StoreKit 거래를 완료한다.
+- 세션의 `remainingToday`는 일일 제공량, `creditBalance`는 별도 충전 잔량이다. 생성 응답도 `x-paxo-remaining`과 `x-paxo-credit-balance`로 구분한다.
+- `creditRevision`과 `storeEnvironment`로 같은 계정·결제 환경의 최신 잔액만 반영한다. Production과 Sandbox의 잔량은 합산하지 않는다.
 - 생성 엔드포인트: `POST /generate`
 - 생성 필수 헤더: `Authorization: Bearer <session>`, `x-paxo-token`
 - 구조화 생성: `x-paxo-response-format: structured-v1`. 해설에는 선택지 검증용 `x-paxo-answer-context` JSON 헤더를 추가한다. 앱과 프록시가 같은 응답 규격을 검증하며 표시용 Markdown 제목은 앱이 만든다.
@@ -53,11 +56,12 @@
 | 캡처 이미지 | 정답 호출에 성공한 이미지는 `Paxo/HistoryImages/<UUID>.jpg`에 저장한다. 메모리 캐시는 최대 8장이고, 보관 기록에서 빠진 이미지는 정리한다. |
 | 로그인 유지 정보 | Mac Keychain의 불투명 갱신 토큰. 서버의 Apple 토큰은 AES-256-GCM 암호화 |
 | 세션 · 사용량 · 풀이 상태 | Upstash Redis. Production/Preview 접두사 분리, TTL 적용 |
-| 구독 상태 | 앱 UI는 StoreKit 2, 실제 AI 권한은 App Store Server API 검증 결과 |
+| 충전 잔량 · 거래 원장 | 서버 Redis에 TTL 없이 저장. 로그인 만료·로그아웃으로 소멸하지 않는다. 중복 거래는 재적립하지 않는다. |
+| 기존 구독 상태 | App Store Server API 검증 결과. 기존 구매 기간 보호용이며 신규 판매하지 않는다. |
 | Gemini API 키 | Gemini API 키,프록시 서버의 환경 변수로 관리. 클라이언트 앱에는 절대 포함하지 않는다. |
 
 풀이 기록 상세에서 개별 기록을, 설정의 풀이 기록 탭에서 보관된 전체 기록을 삭제한다.
-전체 삭제는 검색·날짜·과목 필터와 무료 열람 범위와 관계없이 적용하며, 과목 목록과 앱 설정은 유지한다.
+전체 삭제는 검색·날짜·과목 필터와 관계없이 적용하며, 과목 목록과 앱 설정은 유지한다.
 `AppState`는 기록 파일을 먼저 저장한 뒤 삭제된 기록의 메모리 캐시와 과목 지정을 정리한다.
 이미지 정리는 기록 저장 후 실행하며 실패하면 사용자에게 재시도를 안내한다. 다음 실행에서도 남은 이미지를 다시 정리한다.
 기록을 읽지 못하면 기존 데이터 보호를 위해 저장·삭제·이미지 정리를 멈춘다.

@@ -59,19 +59,62 @@ struct GenerationTransportTests {
         #expect(result.text.contains("- ②:"))
         #expect(result.text.contains("- ④:"))
     }
+
+    @Test func paidBalanceRemainsSeparateFromDailyFreeAllowance() async throws {
+        let payload = try #require(GenerationFixtures.load()["answer"])
+        let session = GenerationURLProtocol.session(
+            responses: [try GenerationFixtures.envelope(payload)],
+            headers: [
+                "x-paxo-remaining": "0", "x-paxo-credit-balance": "499", "x-paxo-credit-revision": "8",
+                "x-paxo-tier": "free", "x-paxo-store-environment": "Production",
+            ]
+        )
+        defer { session.invalidateAndCancel() }
+        let service = GeminiService(
+            apiKey: "", proxyURL: "https://proxy.example.com", useDirectGemini: false, session: session)
+        let result = try await service.answer(
+            imageData: Data([0xff, 0xd8, 0xff]), preset: .general, sessionToken: "test-session", solveID: UUID()
+        )
+        #expect(result.remainingToday == 0)
+        #expect(result.creditBalance == 499)
+        #expect(result.creditRevision == 8)
+        #expect(result.storeEnvironment == "Production")
+        #expect(result.tier == .free)
+    }
+
+    @Test func exhaustedCreditsOpenRechargePathInsteadOfRateLimitError() async throws {
+        let session = GenerationURLProtocol.session(
+            responses: [Data(#"{"error":{"code":"daily_limit"}}"#.utf8)], statusCode: 429
+        )
+        defer { session.invalidateAndCancel() }
+        let service = GeminiService(
+            apiKey: "", proxyURL: "https://proxy.example.com", useDirectGemini: false, session: session)
+        do {
+            _ = try await service.answer(
+                imageData: Data([0xff, 0xd8, 0xff]), preset: .general, sessionToken: "test-session", solveID: UUID()
+            )
+            Issue.record("풀이권 소진 오류가 필요합니다.")
+        } catch GeminiError.creditsExhausted {
+            #expect(GenerationURLProtocol.requests.count == 1)
+        }
+    }
 }
 
 private final class GenerationURLProtocol: URLProtocol {
     private static let lock = NSLock()
     private static var responses: [Data] = []
     private static var capturedRequests: [URLRequest] = []
+    private static var responseHeaders: [String: String] = [:]
+    private static var responseStatus = 200
 
     static var requests: [URLRequest] { lock.withLock { capturedRequests } }
 
-    static func session(responses: [Data]) -> URLSession {
+    static func session(responses: [Data], headers: [String: String] = [:], statusCode: Int = 200) -> URLSession {
         lock.withLock {
             self.responses = responses
             capturedRequests = []
+            responseHeaders = headers
+            responseStatus = statusCode
         }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [GenerationURLProtocol.self]
@@ -82,12 +125,13 @@ private final class GenerationURLProtocol: URLProtocol {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        let data = Self.lock.withLock {
+        let (data, status, headers) = Self.lock.withLock {
             Self.capturedRequests.append(request)
-            return Self.responses.isEmpty ? Data() : Self.responses.removeFirst()
+            let data = Self.responses.isEmpty ? Data() : Self.responses.removeFirst()
+            return (data, Self.responseStatus, Self.responseHeaders)
         }
         guard let url = request.url,
-            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+            let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: headers)
         else { return }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)

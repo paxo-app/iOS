@@ -2,17 +2,17 @@ import Foundation
 
 /// 날짜 경계는 기기의 달력을 사용해 자정과 시간대 변경에도 기록을 정확히 묶는다.
 enum HistoryBrowser {
-    static func visible(_ items: [SolveResult], tier: ProxyTier) -> [SolveResult] {
-        Array(items.sorted { $0.date > $1.date }.prefix(tier == .pro ? 100 : 10))
+    static func visible(_ items: [SolveResult]) -> [SolveResult] {
+        Array(items.sorted { $0.date > $1.date }.prefix(100))
     }
 
-    static func recent(_ items: [SolveResult], tier: ProxyTier, requestedCount: Int) -> [SolveResult] {
-        Array(visible(items, tier: tier).prefix(max(requestedCount, 1)))
+    static func recent(_ items: [SolveResult], requestedCount: Int) -> [SolveResult] {
+        Array(visible(items).prefix(max(requestedCount, 1)))
     }
 
-    static func shouldClose(activeResultID: UUID?, items: [SolveResult], tier: ProxyTier) -> Bool {
+    static func shouldClose(activeResultID: UUID?, items: [SolveResult]) -> Bool {
         guard let activeResultID else { return false }
-        return !visible(items, tier: tier).contains { $0.id == activeResultID }
+        return !visible(items).contains { $0.id == activeResultID }
     }
 
     static func filter(

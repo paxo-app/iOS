@@ -52,7 +52,7 @@ x-paxo-token:  <공유 시크릿(Shared Secret)>
 * 서버는 JSON 스키마와 `thinkingLevel: low`, 정답 2,048·해설 4,096토큰 한도를 적용한다. 잘림이나 형식 오류에는 동일 예약 안에서 한 번만 한도를 두 배로 늘려 재생성한다. 전체 업스트림 시간 한도는 45초다.
 * `finishReason: STOP`과 비어 있지 않은 최종 텍스트를 확인한 뒤에만 정답 사용량 또는 해설 완료를 확정한다. 구조화 응답은 유형·선택 번호·필수 해설·모든 비정답 선택지의 이유까지 검증한다.
 * 재생성 후에도 잘리면 502 `incomplete_response`, 형식 검증이 실패하면 502 `invalid_response`로 반환하고 예약을 해제한다. 정답은 차감하지 않고, 해설 실패에는 추가 차감이 없다.
-* 성공 응답은 `x-paxo-tier`, `x-paxo-remaining`, `x-paxo-reset-at` 헤더를 포함한다.
+* 성공 응답은 `x-paxo-tier`, `x-paxo-remaining`, `x-paxo-reset-at`, `x-paxo-credit-balance`, `x-paxo-credit-revision`, `x-paxo-store-environment` 헤더를 포함한다. 잔액과 버전은 성공 확정 Lua에서 함께 반환한다.
 * Gemini 오류는 502, 타임아웃은 504로 정규화하며 원문 오류는 노출하지 않는다.
 * Redis나 Apple 상태 확인 실패는 503으로 fail-closed 한다.
 * 보안을 위해 업스트림의 상세 에러 본문은 클라이언트에 노출하지 않는다.
@@ -62,12 +62,24 @@ x-paxo-token:  <공유 시크릿(Shared Secret)>
 
 * `/session/challenge`의 일회용 nonce와 Apple identity token·authorization code로 로그인한다.
 * Apple 사용자 식별자는 HMAC 처리하고, Apple 갱신 토큰은 AES-256-GCM으로 암호화한다.
-* 무료는 하루 2회, Pro는 하루 100회이며 정답 성공 때만 차감한다. 사용량은 매일 오전 6시(Asia/Seoul)에 초기화한다.
-* 같은 `solveId`의 해설은 정답 성공 후 한 번만 허용하며 추가 차감하지 않는다.
+* 무료는 하루 2회이며 정답 성공 때만 차감하고 오전 6시(Asia/Seoul)에 초기화한다. 충전 풀이권은 무료분을 먼저 사용한 뒤 차감하며 유효기간과 일일 상한이 없다. 기존 유효 구독의 하루 100회는 계약 기간 동안 유지한다.
+* 같은 `solveId`의 해설은 정답 성공 후 한 번만 허용하며 추가 차감하지 않는다. 서버 풀이 상태 TTL은 48시간이며, 저장한 해설을 다시 읽는 것은 API 요청이 아니다.
 * `APP_TOKEN`은 반드시 설정한다. 누락 상태에서 인증을 우회하는 배포는 금지한다.
 * Production과 Preview가 Redis를 공유할 때 `REDIS_KEY_PREFIX`를 각각 `paxo:prod`, `paxo:preview`로 강제한다.
 
 `APP_TOKEN_PREV`는 짧은 로테이션 기간에만 사용하고 제거한다.
+
+### 충전 계약
+
+* `POST /purchases`: Bearer 세션·`x-paxo-token`, 본문 `{ signedTransactionInfo: JWS }`만 허용한다. Apple 서명과 최신 `getTransactionInfo`, 번들·상품·소모성 타입·수량 1·`appAccountToken`·환경을 검증한다.
+* 세션과 구매 응답은 `creditBalance`, `creditRevision`, `storeEnvironment`를 반환한다. 세션의 `appAccountToken`으로 StoreKit 구매를 시작하고 서버 성공 응답 뒤에만 트랜잭션을 완료한다.
+* 상품은 `com.hyeseong.Paxo.credits.30`·`.100`·`.500`·`.1000`이며 각각 30·100·500·1,000회를 적립한다. 가격은 한국 기준 990·2,900·13,900·26,900원이다.
+* `creditBalance`는 확정 잔액이며 진행 중인 예약으로 화면 잔액을 줄이지 않는다. 동시 실행 가능량은 별도 예약에서 보호하고 예약만으로 부족한 경우 409를 반환한다.
+* Production과 Sandbox 지갑·예약·잔액 버전은 분리한다. 세션 환경은 검증된 StoreKit 증명에서 정하며 증명이 없으면 배포 설정을 따른다. 거래 환경이 세션과 다르면 409 `storekit_environment_mismatch`로 거절한다.
+* `POST /store/notifications`: App Store Server Notifications V2의 서명된 `signedPayload`를 검증한다. 환불·권한 회수·환불 취소는 최신 거래를 재조회하고 서명 시각 순서로 원장에 반영한다. 알림은 풀이권을 처음 적립하지 않는다.
+* 지갑과 거래 중복 방지 원장에는 TTL을 두지 않는다. 환불된 수량을 이미 사용했다면 내부 잔액이 음수가 될 수 있고 이후 충전에서 상계한다. 응답 잔액은 최소 0이다.
+* 계정 삭제는 계정·세션·지갑을 Lua 한 번으로 삭제한다. 거래 해시·가명 소유자·수량·상태 등 최소 원장은 중복 적립 방지를 위해 유지한다. 지갑 세대를 구분해 삭제 전 거래의 환불·취소가 재가입한 지갑에 영향을 주지 않는다.
+
 
 ## 4. 환경 변수 (Environment Variables)
 

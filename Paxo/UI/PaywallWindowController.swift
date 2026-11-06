@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// 구독 안내 창을 재사용하고 구매 상태를 같은 저장소에서 관찰하게 한다.
+/// 충전 안내 창을 재사용하고 구매 상태를 같은 저장소에서 관찰하게 한다.
 @MainActor
 final class PaywallWindowController {
     private var window: NSWindow?
@@ -9,12 +9,12 @@ final class PaywallWindowController {
     func show(store: StoreManager) {
         if window == nil {
             let newWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 340, height: 460),
+                contentRect: NSRect(x: 0, y: 0, width: 420, height: 650),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
-            newWindow.title = "Paxo Pro"
+            newWindow.title = "풀이권 충전"
             newWindow.titlebarAppearsTransparent = false
             newWindow.isOpaque = false
             newWindow.backgroundColor = .clear

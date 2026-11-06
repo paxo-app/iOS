@@ -1,13 +1,15 @@
 import { TIER_LIMITS } from "./config.js";
 import { HttpError } from "./errors.js";
-import { hashSubject, hashToken, newOpaqueToken, seoulUsageWindow } from "./security.js";
+import { appAccountToken, hashSubject, hashToken, newOpaqueToken, seoulUsageWindow } from "./security.js";
 
 const SESSION_TTL_MS = 15 * 60 * 1000;
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const APP_TRANSACTION_MAX_LENGTH = 20_000;
 
-async function resolveTier({ appleStore, config, proof, store, subject, now }) {
-  if (proof === undefined || proof === null) return "free";
+async function resolveStoreContext({ appleStore, config, proof, store, subject, now }) {
+  if (proof === undefined || proof === null) return {
+    tier: "free", storeEnvironment: config.appStoreEnvironment === "SANDBOX" ? "Sandbox" : "Production",
+  };
   if (
     typeof proof !== "object" ||
     Array.isArray(proof) ||
@@ -23,6 +25,10 @@ async function resolveTier({ appleStore, config, proof, store, subject, now }) {
     proof.type === "appTransaction"
       ? await appleStore.verifyAppTransaction(proof.jws)
       : await appleStore.verifyTransaction(proof.jws);
+  if (transactionReference.isCredit && transactionReference.appAccountToken !== appAccountToken(subject)) {
+    throw new HttpError(409, "storekit_account_mismatch", "purchase belongs to another account");
+  }
+  if (!transactionReference.transactionId) return { tier: "free", storeEnvironment: transactionReference.environment };
   const transactionHash = hashSubject(
     `transaction:${transactionReference.environment}:${transactionReference.transactionId}`,
     config.identityHashSecret
@@ -30,10 +36,17 @@ async function resolveTier({ appleStore, config, proof, store, subject, now }) {
   if (!(await store.bindAppTransaction(transactionHash, subject))) {
     throw new HttpError(409, "storekit_account_mismatch", "App Store account is already linked");
   }
-  return appleStore.resolveTier(transactionReference, now.getTime());
+  return {
+    tier: transactionReference.isCredit ? "free" : await appleStore.resolveTier(transactionReference, now.getTime()),
+    storeEnvironment: transactionReference.environment,
+  };
 }
 
-async function issueSession({ clock, store, subject, tier, tokenFactory = newOpaqueToken }) {
+async function resolveTier(options) {
+  return (await resolveStoreContext(options)).tier;
+}
+
+async function issueSession({ clock, store, subject, tier, storeEnvironment = "Production", tokenFactory = newOpaqueToken }) {
   const now = clock();
   const { day, resetAt } = seoulUsageWindow(now);
   const used = await store.getUsage(subject, day);
@@ -42,10 +55,13 @@ async function issueSession({ clock, store, subject, tier, tokenFactory = newOpa
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
   const refreshExpiresAt = new Date(now.getTime() + REFRESH_TTL_MS).toISOString();
   await Promise.all([
-    store.putSession(hashToken(sessionToken), { expiresAt, subject, tier }),
+    store.putSession(hashToken(sessionToken), { storeEnvironment, expiresAt, subject, tier }),
     store.putRefresh(hashToken(refreshToken), { expiresAt: refreshExpiresAt, subject }),
   ]);
   return {
+    appAccountToken: appAccountToken(subject),
+    storeEnvironment,
+    ...await store.getCreditSnapshot(subject, storeEnvironment),
     expiresAt,
     refreshToken,
     remainingToday: Math.max(0, TIER_LIMITS[tier] - used),
@@ -100,4 +116,4 @@ function validString(value, maximum) {
   return typeof value === "string" && value.length > 0 && value.length <= maximum;
 }
 
-export { issueSession, parseRefreshBody, parseSessionBody, resolveTier };
+export { issueSession, parseRefreshBody, parseSessionBody, resolveStoreContext, resolveTier };

@@ -60,7 +60,7 @@ struct HistoryManagementTests {
         #expect(state.current?.explanation == nil)
     }
 
-    @Test func freeUserCanDeleteAllIncludingHiddenRecordsAndOrphanedImages() throws {
+    @Test func userCanReadAndDeleteAllRecordsWithoutSubscription() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = HistoryStore(baseURL: directory)
@@ -75,8 +75,8 @@ struct HistoryManagementTests {
         let state = AppState(historyStore: store, subjectStore: subjects)
         state.loadHistory()
         #expect(state.serverTier == .free)
-        #expect(state.visibleHistory.count == 10)
-        #expect(!state.deleteHistory(items[0].id))
+        #expect(state.visibleHistory.count == 12)
+        #expect(state.deleteHistory(items[0].id))
         _ = try store.saveImage(Data([42]), for: UUID())
         #expect(state.deleteAllHistory())
         #expect(state.history.isEmpty)

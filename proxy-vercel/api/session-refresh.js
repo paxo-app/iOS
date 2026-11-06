@@ -5,7 +5,7 @@ import { asHttpError, HttpError } from "../lib/errors.js";
 import { sendError } from "../lib/http.js";
 import { createRedisStore } from "../lib/redis-store.js";
 import { decryptSecret, hashToken, requireAppToken } from "../lib/security.js";
-import { issueSession, parseRefreshBody, resolveTier } from "../lib/session-service.js";
+import { issueSession, parseRefreshBody, resolveStoreContext } from "../lib/session-service.js";
 
 const APPLE_VALIDATION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -46,7 +46,7 @@ function createRefreshHandler(dependencies = {}) {
         await store.putAccount(refresh.subject, { ...account, validatedAt: clock().toISOString() });
       }
 
-      const tier = await resolveTier({
+      const { tier, storeEnvironment } = await resolveStoreContext({
         appleStore: appleStoreFactory(config),
         config,
         now: clock(),
@@ -59,6 +59,7 @@ function createRefreshHandler(dependencies = {}) {
         store,
         subject: refresh.subject,
         tier,
+        storeEnvironment,
         tokenFactory,
       });
       consumedRefresh = undefined;

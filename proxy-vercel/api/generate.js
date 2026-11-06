@@ -71,14 +71,15 @@ function createGenerateHandler(dependencies = {}) {
           day,
           parsed.solveId,
           limit,
-          now.getTime()
+          now.getTime(),
+          session.storeEnvironment || "Production"
         );
       } else {
         reservation = await store.reserveExplanation(session.subject, parsed.solveId);
       }
       if (!reservation.allowed) {
         if (reservation.reason === "daily_limit") {
-          setUsageHeaders(res, session.tier, 0, resetAt);
+          setUsageHeaders(res, session.tier, 0, resetAt, await store.getCreditSnapshot(session.subject, session.storeEnvironment || "Production"));
         }
         throw reservationError(reservation.reason);
       }
@@ -113,20 +114,20 @@ function createGenerateHandler(dependencies = {}) {
         }
       }
 
-      let remaining;
+      let snapshot;
       if (parsed.kind === "answer") {
-        remaining = await store.finalizeAnswer(
+        snapshot = await store.finalizeAnswer(
           session.subject,
           day,
           parsed.solveId,
-          TIER_LIMITS[session.tier]
+          TIER_LIMITS[session.tier],
+          reservation.reservationId,
+          session.storeEnvironment || "Production"
         );
       } else {
-        await store.finalizeExplanation(session.subject, parsed.solveId);
-        const used = await store.getUsage(session.subject, day);
-        remaining = Math.max(0, TIER_LIMITS[session.tier] - used);
+        snapshot = await store.finalizeExplanation(session.subject, parsed.solveId, day, TIER_LIMITS[session.tier], session.storeEnvironment || "Production");
       }
-      setUsageHeaders(res, session.tier, remaining, resetAt);
+      setUsageHeaders(res, session.tier, snapshot.remainingToday, resetAt, snapshot);
       console.log(
         JSON.stringify({
           bytesIn: contentLength,
@@ -145,7 +146,7 @@ function createGenerateHandler(dependencies = {}) {
     } catch (error) {
       if (reservation && reservation.allowed && store && session && parsed) {
         try {
-          await releaseReservation(store, session.subject, day, parsed);
+          await releaseReservation(store, session.subject, day, parsed, reservation.reservationId, session.storeEnvironment || "Production");
         } catch {
           // Redis가 실패한 경우 원래 오류만 반환하고 Gemini 재호출은 허용하지 않는다.
         }
@@ -245,9 +246,9 @@ function reservationError(reason) {
   return new HttpError(503, "service_unavailable", "service unavailable");
 }
 
-async function releaseReservation(store, subject, day, parsed) {
+async function releaseReservation(store, subject, day, parsed, reservationId, storeEnvironment) {
   if (parsed.kind === "answer") {
-    await store.releaseAnswer(subject, day, parsed.solveId);
+    await store.releaseAnswer(subject, day, parsed.solveId, reservationId, storeEnvironment);
   } else {
     await store.releaseExplanation(subject, parsed.solveId);
   }

@@ -14,16 +14,52 @@ enum ProxyTier: String, Codable {
     }
 }
 
+struct CreditBalance: Decodable, Equatable {
+    let creditBalance: Int
+    let creditRevision: Int
+    let storeEnvironment: String
+
+    init(creditBalance: Int, creditRevision: Int = 0, storeEnvironment: String = "Production") {
+        self.creditBalance = max(0, creditBalance)
+        self.creditRevision = max(0, creditRevision)
+        self.storeEnvironment = storeEnvironment
+    }
+}
+
 struct ProxySession: Decodable {
     let expiresAt: Date
+    let creditBalance: Int
+    let creditRevision: Int
+    let storeEnvironment: String
+    let appAccountToken: UUID?
     let refreshToken: String
     let remainingToday: Int
     let resetAt: Date
     let sessionToken: String
     let tier: ProxyTier
+
+    private enum CodingKeys: String, CodingKey {
+        case expiresAt, creditBalance, creditRevision, storeEnvironment, appAccountToken, refreshToken, remainingToday,
+            resetAt,
+            sessionToken, tier
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        expiresAt = try container.decode(Date.self, forKey: .expiresAt)
+        creditBalance = max(0, try container.decodeIfPresent(Int.self, forKey: .creditBalance) ?? 0)
+        creditRevision = max(0, try container.decodeIfPresent(Int.self, forKey: .creditRevision) ?? 0)
+        storeEnvironment = try container.decodeIfPresent(String.self, forKey: .storeEnvironment) ?? "Production"
+        appAccountToken = try container.decodeIfPresent(UUID.self, forKey: .appAccountToken)
+        refreshToken = try container.decode(String.self, forKey: .refreshToken)
+        remainingToday = try container.decode(Int.self, forKey: .remainingToday)
+        resetAt = try container.decode(Date.self, forKey: .resetAt)
+        sessionToken = try container.decode(String.self, forKey: .sessionToken)
+        tier = try container.decode(ProxyTier.self, forKey: .tier)
+    }
 }
 
-struct StoreKitProof: Codable {
+struct StoreKitProof: Codable, Equatable {
     enum Kind: String, Codable {
         case appTransaction
         case transaction
@@ -65,13 +101,12 @@ struct StoreKitProofProvider: StoreKitProofProviding {
         // 구독 계정과 앱 다운로드 계정이 다를 수 있어 현재 구독 거래를 먼저 증명한다.
         for await entitlement in Transaction.currentEntitlements {
             guard case .verified(let transaction) = entitlement,
-                StoreProducts.identifiers.contains(transaction.productID),
+                StoreProducts.legacySubscriptionIdentifiers.contains(transaction.productID),
                 transaction.revocationDate == nil
             else { continue }
             return StoreKitProof(jws: entitlement.jwsRepresentation, type: .transaction)
         }
-        if #available(macOS 15.0, *),
-            let result = try? await AppTransaction.shared,
+        if let result = try? await AppTransaction.shared,
             case .verified = result
         {
             return StoreKitProof(jws: result.jwsRepresentation, type: .appTransaction)
@@ -88,6 +123,9 @@ final class ProxySessionManager {
     private let proofProvider: StoreKitProofProviding
     private var cachedSession: ProxySession?
     private var refreshTask: Task<ProxySession, Error>?
+    private var credentialEpoch = 0
+    private var refreshIdentifier: UUID?
+    private var refreshProof: StoreKitProof?
     private(set) var pendingNonce: String?
 
     #if DEBUG
@@ -113,18 +151,22 @@ final class ProxySessionManager {
     }
 
     func prepareChallenge() async throws -> String {
+        let epoch = credentialEpoch
         var request = try makeRequest(path: "/session/challenge")
         request.httpMethod = "POST"
         request.setValue(DefaultConfig.appToken, forHTTPHeaderField: "x-paxo-token")
         let (data, response) = try await load(request)
+        try requireCurrentCredentials(epoch)
         try requireStatus(response, data: data, expected: 200)
         let challenge = try decode(ChallengeResponse.self, from: data)
         guard !challenge.nonce.isEmpty else { throw ProxySessionError.invalidResponse }
+        try requireCurrentCredentials(epoch)
         pendingNonce = challenge.nonce
         return challenge.nonce
     }
 
     func signIn(identityToken: String, authorizationCode: String) async throws -> ProxySession {
+        let epoch = credentialEpoch
         guard let nonce = pendingNonce else { throw ProxySessionError.challengeRequired }
         pendingNonce = nil
         let body = SignInRequest(
@@ -135,14 +177,16 @@ final class ProxySessionManager {
             ),
             storeKitProof: await proofProvider.proof()
         )
-        let session = try await sendSessionRequest(path: "/session", body: body)
+        let session = try await sendSessionRequest(path: "/session", body: body, epoch: epoch)
+        try requireCurrentCredentials(epoch)
         remember(session)
         return session
     }
 
-    func session(forceRefresh: Bool = false) async throws -> ProxySession {
+    func session(forceRefresh: Bool = false, storeKitProof: StoreKitProof? = nil) async throws -> ProxySession {
+        let epoch = credentialEpoch
         let now = clock()
-        if !forceRefresh,
+        if !forceRefresh, storeKitProof == nil,
             let cachedSession,
             cachedSession.expiresAt.timeIntervalSince(now) > 15,
             cachedSession.resetAt > now
@@ -150,50 +194,105 @@ final class ProxySessionManager {
             return cachedSession
         }
         if let refreshTask {
-            return try await refreshTask.value
+            let identifier = refreshIdentifier
+            let matchesProof = storeKitProof == nil || storeKitProof == refreshProof
+            let session = try await refreshTask.value
+            try requireCurrentCredentials(epoch)
+            if matchesProof { return session }
+            if refreshIdentifier == identifier {
+                self.refreshTask = nil
+                refreshIdentifier = nil
+                refreshProof = nil
+            }
+            return try await self.session(forceRefresh: true, storeKitProof: storeKitProof)
         }
+        let identifier = UUID()
         let task = Task { @MainActor in
             guard let refreshToken = credentialStore.loadRefreshToken(),
                 !refreshToken.isEmpty
             else {
                 throw ProxySessionError.signInRequired
             }
-            let body = RefreshRequest(
-                refreshToken: refreshToken,
-                storeKitProof: await proofProvider.proof()
-            )
-            let session = try await sendSessionRequest(path: "/session/refresh", body: body)
+            let proof: StoreKitProof?
+            if let storeKitProof { proof = storeKitProof } else { proof = await proofProvider.proof() }
+            let body = RefreshRequest(refreshToken: refreshToken, storeKitProof: proof)
+            let session = try await sendSessionRequest(path: "/session/refresh", body: body, epoch: epoch)
+            try requireCurrentCredentials(epoch)
             remember(session)
             return session
         }
         refreshTask = task
-        defer { refreshTask = nil }
-        return try await task.value
+        refreshIdentifier = identifier
+        refreshProof = storeKitProof
+        defer {
+            if refreshIdentifier == identifier {
+                refreshTask = nil
+                refreshIdentifier = nil
+                refreshProof = nil
+            }
+        }
+        let session = try await task.value
+        try requireCurrentCredentials(epoch)
+        return session
     }
 
     func withSessionRetry<T>(
+        storeKitProof: StoreKitProof? = nil,
         _ operation: (ProxySession) async throws -> T
     ) async throws -> T {
-        let current = try await session()
+        let epoch = credentialEpoch
+        let current = try await session(forceRefresh: storeKitProof != nil, storeKitProof: storeKitProof)
         do {
-            return try await operation(current)
+            let value = try await operation(current)
+            try requireCurrentCredentials(epoch)
+            return value
         } catch GeminiError.invalidSession {
+            try requireCurrentCredentials(epoch)
             cachedSession = nil
-            let refreshed = try await session(forceRefresh: true)
-            return try await operation(refreshed)
+            let refreshed = try await session(forceRefresh: true, storeKitProof: storeKitProof)
+            let value = try await operation(refreshed)
+            try requireCurrentCredentials(epoch)
+            return value
         }
     }
 
+    func redeemPurchase(signedTransactionInfo: String) async throws -> CreditBalance {
+        let epoch = credentialEpoch
+        let proof = StoreKitProof(jws: signedTransactionInfo, type: .transaction)
+        let balance = try await withSessionRetry(storeKitProof: proof) { session in
+            try requireCurrentCredentials(epoch)
+            var request = try makeRequest(path: "/purchases")
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(DefaultConfig.appToken, forHTTPHeaderField: "x-paxo-token")
+            request.setValue("Bearer \(session.sessionToken)", forHTTPHeaderField: "Authorization")
+            request.httpBody = try JSONEncoder().encode(PurchaseRequest(signedTransactionInfo: signedTransactionInfo))
+            let (data, response) = try await load(request)
+            try requireCurrentCredentials(epoch)
+            if let http = response as? HTTPURLResponse,
+                http.statusCode == 401, Self.errorCode(from: data) == "invalid_session"
+            {
+                throw GeminiError.invalidSession
+            }
+            try requireStatus(response, data: data, expected: 200)
+            return try decode(CreditBalance.self, from: data)
+        }
+        try requireCurrentCredentials(epoch)
+        // 다음 풀이 사전 검증이 충전 전 잔량을 재사용하지 않도록 한다.
+        cachedSession = nil
+        return balance
+    }
+
     func logout() async {
-        defer { clearCredentials() }
-        guard let refreshToken = credentialStore.loadRefreshToken(),
-            var request = try? makeRequest(path: "/session/logout")
-        else { return }
+        let refreshToken = credentialStore.loadRefreshToken()
+        let sessionToken = cachedSession?.sessionToken
+        clearCredentials()
+        guard let refreshToken, var request = try? makeRequest(path: "/session/logout") else { return }
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let cachedSession {
+        if let sessionToken {
             request.setValue(
-                "Bearer \(cachedSession.sessionToken)",
+                "Bearer \(sessionToken)",
                 forHTTPHeaderField: "Authorization"
             )
         }
@@ -214,11 +313,18 @@ final class ProxySessionManager {
     }
 
     func clearCredentials() {
+        credentialEpoch &+= 1
         refreshTask?.cancel()
         refreshTask = nil
+        refreshIdentifier = nil
+        refreshProof = nil
         cachedSession = nil
         pendingNonce = nil
         credentialStore.saveRefreshToken("")
+    }
+
+    private func requireCurrentCredentials(_ epoch: Int) throws {
+        guard epoch == credentialEpoch else { throw ProxySessionError.signInRequired }
     }
 
     private func remember(_ session: ProxySession) {
@@ -226,13 +332,16 @@ final class ProxySessionManager {
         credentialStore.saveRefreshToken(session.refreshToken)
     }
 
-    private func sendSessionRequest<Body: Encodable>(path: String, body: Body) async throws -> ProxySession {
+    private func sendSessionRequest<Body: Encodable>(path: String, body: Body, epoch: Int) async throws -> ProxySession
+    {
+        try requireCurrentCredentials(epoch)
         var request = try makeRequest(path: path)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(DefaultConfig.appToken, forHTTPHeaderField: "x-paxo-token")
         request.httpBody = try JSONEncoder().encode(body)
         let (data, response) = try await load(request)
+        try requireCurrentCredentials(epoch)
         try requireStatus(response, data: data, expected: 200)
         return try decode(ProxySession.self, from: data)
     }
@@ -261,7 +370,11 @@ final class ProxySessionManager {
                 throw ProxySessionError.challengeRequired
             case (401, _):
                 throw ProxySessionError.appleVerificationFailed
-            case (409, "storekit_account_mismatch"):
+            case (409, "purchase_revoked"):
+                throw ProxySessionError.purchaseRevoked
+            case (409, "storekit_environment_mismatch"):
+                throw ProxySessionError.storeKitEnvironmentMismatch
+            case (409, "storekit_account_mismatch"), (409, "purchase_account_mismatch"):
                 throw ProxySessionError.storeKitAccountMismatch
             case (503, _):
                 throw ProxySessionError.serviceUnavailable
@@ -338,6 +451,10 @@ private struct RefreshRequest: Encodable {
     let storeKitProof: StoreKitProof?
 }
 
+private struct PurchaseRequest: Encodable {
+    let signedTransactionInfo: String
+}
+
 private struct LogoutRequest: Encodable {
     let refreshToken: String
 }
@@ -348,9 +465,11 @@ enum ProxySessionError: LocalizedError {
     case invalidResponse
     case invalidURL
     case network(URLError)
+    case purchaseRevoked
     case serviceUnavailable
     case signInRequired
     case storeKitAccountMismatch
+    case storeKitEnvironmentMismatch
 
     var errorDescription: String? {
         switch self {
@@ -373,8 +492,12 @@ enum ProxySessionError: LocalizedError {
             }
         case .signInRequired:
             return "Paxo를 사용하려면 Apple로 로그인해주세요."
+        case .purchaseRevoked:
+            return "환불되었거나 취소된 구매여서 풀이권을 적립할 수 없습니다."
         case .storeKitAccountMismatch:
-            return "이 App Store 구독은 다른 Paxo 계정에 연결되어 있습니다."
+            return "이 App Store 구매는 다른 Paxo 계정에 연결되어 있습니다."
+        case .storeKitEnvironmentMismatch:
+            return "구매 환경을 확인하지 못했습니다. 잔액을 새로고침한 뒤 다시 시도해주세요."
         }
     }
 }

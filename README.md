@@ -34,13 +34,30 @@ Paxo/
   Storage/                 로컬 히스토리 JSON 및 키체인 관리
 PaxoTests/                 순수 비즈니스 로직 테스트 (Swift Testing 프레임워크)
 Config/                    Info.plist, App Sandbox Entitlements, StoreKit 설정, 시크릿 템플릿
-proxy-vercel/              Apple 로그인·구독 검증·Redis 사용량 제한·Gemini 프록시
+proxy-vercel/              Apple 로그인·충전 거래 검증·Redis 풀이권 관리·Gemini 프록시
 docs/                      아키텍처, 도메인 용어, 의사결정 기록 등 문서화
 .claude/skills/            Claude Code 전용 커스텀 스킬
 .github/workflows/         CI 파이프라인 설정 (빌드, 테스트, 린트, 금지 파일 검사)
 
 ```
 
-## 3. License
+## 3. 풀이권
+
+무료 풀이는 하루 2회이며 매일 오전 6시(한국 시간)에 초기화됩니다. 무료분을 먼저 사용하고,
+이후에는 충전한 풀이권을 사용합니다. 정답 생성에 성공하면 1회를 차감하며 같은 풀이의 해설에는 추가 차감이 없습니다.
+
+| 제공량 | 한국 스토어 판매가 |
+| --- | ---: |
+| 30회 | 990원 |
+| 100회 | 2,900원 |
+| 500회 | 13,900원 |
+| 1,000회 | 26,900원 |
+
+충전 잔량은 만료되지 않으며 같은 Paxo 계정으로 로그인하면 다시 확인할 수 있습니다.
+실제 결제 가격은 App Store 상품 정보를 표시합니다. Pro 신규 구독 판매와 AI 복습 기능은 제공하지 않습니다.
+기존 구독 구매자의 남은 이용 기간은 유지합니다. 상품 등록과 서버 배포 순서는
+[풀이권 출시 안내](docs/credits-rollout.md)를 참고하세요.
+
+## 4. License
 
 이 프로젝트는 [MIT 라이선스](https://www.google.com/search?q=LICENSE&utm_source=gemini)를 따릅니다.

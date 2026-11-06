@@ -41,6 +41,7 @@ final class AppState: ObservableObject {
     @Published private(set) var authenticationPhase: AuthenticationPhase = .preparing
     @Published private(set) var isAppleSignInReady = false
     @Published private(set) var remainingToday = 0
+    @Published private(set) var creditBalance = 0
     @Published private(set) var serverTier: ProxyTier = .free
     @Published private(set) var usageResetAt: Date?
 
@@ -62,13 +63,13 @@ final class AppState: ObservableObject {
     }
 
     var recentHistory: [SolveResult] {
-        HistoryBrowser.recent(history, tier: serverTier, requestedCount: recentHistoryLimit)
+        HistoryBrowser.recent(history, requestedCount: recentHistoryLimit)
     }
 
-    var historyDisplayLimit: Int { serverTier == .pro ? 100 : 10 }
+    var historyDisplayLimit: Int { 100 }
 
     var visibleHistory: [SolveResult] {
-        HistoryBrowser.visible(history, tier: serverTier)
+        HistoryBrowser.visible(history)
     }
     @Published var captureMode: CaptureMode {
         didSet { UserDefaults.standard.set(captureMode.rawValue, forKey: "captureMode") }
@@ -148,7 +149,7 @@ final class AppState: ObservableObject {
     }
     #endif
 
-    /// 구독 상태 관리 (뷰에는 별도 environmentObject로 주입)
+    /// 구매 상태 관리 (뷰에는 별도 environmentObject로 주입)
     let store = StoreManager()
 
     var canRequestExplanation: Bool {
@@ -188,6 +189,9 @@ final class AppState: ObservableObject {
     private var lastCaptureScreen: NSScreen?
     private var toastDismissTask: Task<Void, Never>?
     private var credentialRevocationTask: Task<Void, Never>?
+    private var authenticationRevision = 0
+    private var creditRevision = 0
+    private var creditEnvironment: String?
     private static let appleUserKey = "apple-user-identifier"
 
     init(historyStore: HistoryStore = HistoryStore(), subjectStore: SubjectStore = SubjectStore()) {
@@ -228,6 +232,46 @@ final class AppState: ObservableObject {
         #endif
         store.onEntitlementsChanged = { [weak self] in
             await self?.refreshServerEntitlements()
+        }
+        store.preparePurchase = { [weak self] in
+            guard let self, case .signedIn = self.authenticationPhase else {
+                throw ProxySessionError.signInRequired
+            }
+            let revision = self.authenticationRevision
+            let session = try await self.sessionManager.session(forceRefresh: true)
+            guard revision == self.authenticationRevision, self.authenticationPhase == .signedIn else {
+                throw ProxySessionError.signInRequired
+            }
+            self.apply(session)
+            guard let token = session.appAccountToken else { throw ProxySessionError.serviceUnavailable }
+            return token
+        }
+        store.redeemPurchase = { [weak self] signedTransactionInfo in
+            guard let self, case .signedIn = self.authenticationPhase else {
+                throw ProxySessionError.signInRequired
+            }
+            let revision = self.authenticationRevision
+            let balance = try await self.sessionManager.redeemPurchase(signedTransactionInfo: signedTransactionInfo)
+            guard revision == self.authenticationRevision, self.authenticationPhase == .signedIn else {
+                throw ProxySessionError.signInRequired
+            }
+            self.applyCreditBalance(balance)
+            return balance
+        }
+        store.refreshBalance = { [weak self] in
+            guard let self, case .signedIn = self.authenticationPhase else {
+                throw ProxySessionError.signInRequired
+            }
+            let revision = self.authenticationRevision
+            let session = try await self.sessionManager.session(forceRefresh: true)
+            guard revision == self.authenticationRevision, self.authenticationPhase == .signedIn else {
+                throw ProxySessionError.signInRequired
+            }
+            self.apply(session)
+            return CreditBalance(
+                creditBalance: session.creditBalance, creditRevision: session.creditRevision,
+                storeEnvironment: session.storeEnvironment
+            )
         }
         store.start()
         hotkeyManager.onHotkey = { [weak self] in
@@ -283,6 +327,7 @@ final class AppState: ObservableObject {
     }
 
     func signOut() {
+        resetAuthentication()
         Task {
             await sessionManager.logout()
             KeychainHelper.save(key: Self.appleUserKey, value: "")
@@ -292,6 +337,8 @@ final class AppState: ObservableObject {
     }
 
     func deleteAccount() {
+        authenticationRevision += 1
+        store.updateAccount(creditBalance: 0, isSignedIn: false)
         Task {
             do {
                 try await sessionManager.deleteAccount()
@@ -319,11 +366,14 @@ final class AppState: ObservableObject {
         Task { await store.reloadProductsIfNeeded() }
     }
 
-    /// 메뉴가 열릴 때 서버 정본을 새로 읽어 오전 6시 초기화와 구독 변경을 반영한다.
+    /// 메뉴가 열릴 때 서버 정본을 읽어 오전 6시 초기화와 다른 기기의 충전을 반영한다.
     func refreshFreeRemaining() {
         Task {
             guard case .signedIn = authenticationPhase else { return }
-            if let session = try? await sessionManager.session(forceRefresh: true) {
+            let revision = authenticationRevision
+            if let session = try? await sessionManager.session(forceRefresh: true),
+                revision == authenticationRevision, authenticationPhase == .signedIn
+            {
                 apply(session)
             }
         }
@@ -363,11 +413,11 @@ final class AppState: ObservableObject {
     }
 
     var historySubjects: [HistorySubject] {
-        serverTier == .pro && subjectCatalogReady ? subjectCatalog.subjects : []
+        subjectCatalogReady ? subjectCatalog.subjects : []
     }
 
     func subject(for resultID: UUID) -> HistorySubject? {
-        guard serverTier == .pro, subjectCatalogReady else { return nil }
+        guard subjectCatalogReady else { return nil }
         return subjectCatalog.subject(for: resultID)
     }
 
@@ -471,7 +521,7 @@ final class AppState: ObservableObject {
     }
 
     private func updateSubjects(_ change: (inout SubjectCatalog) throws -> Void) -> Bool {
-        guard serverTier == .pro, subjectCatalogReady else { return false }
+        guard subjectCatalogReady else { return false }
         do {
             var updated = subjectCatalog
             try change(&updated)
@@ -550,6 +600,7 @@ final class AppState: ObservableObject {
     }
 
     private func restoreAuthentication() async {
+        let revision = authenticationRevision
         authenticationPhase = .preparing
         guard let userID = KeychainHelper.load(key: Self.appleUserKey), !userID.isEmpty else {
             sessionManager.clearCredentials()
@@ -570,9 +621,12 @@ final class AppState: ObservableObject {
         }
         do {
             let session = try await sessionManager.session(forceRefresh: true)
+            guard revision == authenticationRevision else { return }
             apply(session)
             authenticationPhase = .signedIn
+            await store.retryPendingPurchases()
         } catch {
+            guard revision == authenticationRevision else { return }
             authenticationPhase = .failed(errorMessage(from: error))
             if let sessionError = error as? ProxySessionError,
                 case .signInRequired = sessionError
@@ -597,6 +651,7 @@ final class AppState: ObservableObject {
     }
 
     private func completeAppleSignIn(_ result: Result<ASAuthorization, Error>) async {
+        let revision = authenticationRevision
         do {
             let authorization = try result.get()
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
@@ -611,14 +666,18 @@ final class AppState: ObservableObject {
                 identityToken: identityToken,
                 authorizationCode: authorizationCode
             )
+            guard revision == authenticationRevision else { return }
             KeychainHelper.save(key: Self.appleUserKey, value: credential.user)
             apply(session)
             authenticationPhase = .signedIn
             isAppleSignInReady = false
+            await store.retryPendingPurchases()
         } catch let error as ASAuthorizationError where error.code == .canceled {
+            guard revision == authenticationRevision else { return }
             authenticationPhase = .signedOut
             await prepareAppleSignIn()
         } catch {
+            guard revision == authenticationRevision else { return }
             authenticationPhase = .failed(errorMessage(from: error))
             await prepareAppleSignIn(preserveError: true)
         }
@@ -635,6 +694,7 @@ final class AppState: ObservableObject {
     }
 
     private func handleCredentialRevocation() async {
+        resetAuthentication()
         await sessionManager.logout()
         KeychainHelper.save(key: Self.appleUserKey, value: "")
         resetAuthentication()
@@ -643,17 +703,25 @@ final class AppState: ObservableObject {
 
     private func refreshServerEntitlements() async {
         guard case .signedIn = authenticationPhase else { return }
+        let revision = authenticationRevision
         do {
             let session = try await sessionManager.session(forceRefresh: true)
+            guard revision == authenticationRevision, authenticationPhase == .signedIn else { return }
             apply(session)
         } catch {
+            guard revision == authenticationRevision else { return }
             authenticationPhase = .failed(errorMessage(from: error))
         }
     }
 
     private func resetAuthentication() {
+        authenticationRevision += 1
         authenticationPhase = .signedOut
         remainingToday = 0
+        creditBalance = 0
+        creditRevision = 0
+        creditEnvironment = nil
+        store.updateAccount(creditBalance: 0, isSignedIn: false)
         serverTier = .free
         enforceHistoryAccess()
         usageResetAt = nil
@@ -661,6 +729,11 @@ final class AppState: ObservableObject {
 
     private func apply(_ session: ProxySession) {
         remainingToday = session.remainingToday
+        applyCreditBalance(
+            CreditBalance(
+                creditBalance: session.creditBalance, creditRevision: session.creditRevision,
+                storeEnvironment: session.storeEnvironment
+            ))
         serverTier = session.tier
         enforceHistoryAccess()
         usageResetAt = session.resetAt
@@ -668,6 +741,12 @@ final class AppState: ObservableObject {
 
     private func apply(_ result: GenerationResult) {
         if let remaining = result.remainingToday { remainingToday = remaining }
+        if let balance = result.creditBalance, let revision = result.creditRevision,
+            let environment = result.storeEnvironment, environment == creditEnvironment
+        {
+            applyCreditBalance(
+                CreditBalance(creditBalance: balance, creditRevision: revision, storeEnvironment: environment))
+        }
         if let resetAt = result.resetAt { usageResetAt = resetAt }
         if let tier = result.tier {
             serverTier = tier
@@ -675,8 +754,22 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func applyCreditBalance(_ balance: CreditBalance) {
+        if balance.storeEnvironment != creditEnvironment {
+            creditRevision = 0
+            creditEnvironment = balance.storeEnvironment
+        }
+        guard balance.creditRevision >= creditRevision else { return }
+        creditRevision = balance.creditRevision
+        creditBalance = balance.creditBalance
+        store.updateAccount(
+            creditBalance: creditBalance, creditRevision: creditRevision, storeEnvironment: balance.storeEnvironment,
+            isSignedIn: true
+        )
+    }
+
     private func enforceHistoryAccess() {
-        guard HistoryBrowser.shouldClose(activeResultID: activeHistoryResultID, items: history, tier: serverTier)
+        guard HistoryBrowser.shouldClose(activeResultID: activeHistoryResultID, items: history)
         else { return }
         activeHistoryResultID = nil
         current = nil
@@ -698,22 +791,23 @@ final class AppState: ObservableObject {
             return
         }
         phase = .checkingAccess
+        let revision = authenticationRevision
         do {
             let session = try await sessionManager.session(forceRefresh: true)
-            apply(session)
-            guard session.remainingToday > 0 else {
+            guard revision == authenticationRevision, authenticationPhase == .signedIn else {
                 phase = .idle
-                if session.tier == .free {
-                    showPaywall()
-                } else {
-                    phase = .failedAnswer(GeminiError.proDailyLimit.localizedDescription)
-                    resultPanel.show(appState: self, on: Self.screenUnderMouse())
-                }
+                return
+            }
+            apply(session)
+            guard session.remainingToday > 0 || session.creditBalance > 0 else {
+                phase = .idle
+                showPaywall()
                 return
             }
             phase = .capturing
             await runSolve()
         } catch {
+            guard revision == authenticationRevision else { return }
             phase = .idle
             authenticationPhase = .failed(errorMessage(from: error))
             if case ProxySessionError.signInRequired = error {
@@ -756,6 +850,7 @@ final class AppState: ObservableObject {
         phase = .solvingAnswer
         presentSolving()
 
+        let revision = authenticationRevision
         do {
             let generated = try await requestAnswer(
                 imageData: capture.data,
@@ -763,7 +858,7 @@ final class AppState: ObservableObject {
                 solveID: result.id
             )
             // 남은 횟수는 서버 정본이므로 취소와 상관없이 반영한다
-            apply(generated)
+            if revision == authenticationRevision { apply(generated) }
             // 취소가 먼저 처리됐으면 응답을 버린다
             guard requestGate.isCurrent(requestID) else { return }
             waitingSince = nil
@@ -784,22 +879,14 @@ final class AppState: ObservableObject {
             } else {
                 requestGate.finish(requestID)
             }
-        } catch GeminiError.freeDailyLimit {
-            guard requestGate.isCurrent(requestID) else { return }
+        } catch GeminiError.creditsExhausted {
+            guard requestGate.isCurrent(requestID), revision == authenticationRevision else { return }
             requestGate.finish(requestID)
             waitingSince = nil
             toast.dismiss(animated: false)
-            remainingToday = 0
+            await refreshServerEntitlements()
             phase = .idle
             showPaywall()
-        } catch GeminiError.proDailyLimit {
-            guard requestGate.isCurrent(requestID) else { return }
-            requestGate.finish(requestID)
-            waitingSince = nil
-            toast.dismiss(animated: false)
-            remainingToday = 0
-            phase = .failedAnswer(GeminiError.proDailyLimit.localizedDescription)
-            resultPanel.show(appState: self, on: lastCaptureScreen)
         } catch {
             guard requestGate.isCurrent(requestID) else { return }
             requestGate.finish(requestID)
@@ -852,6 +939,7 @@ final class AppState: ObservableObject {
         }
         let solveID = current.id
         let startedAt = Date()
+        let revision = authenticationRevision
         pendingExplanationStarts[solveID] = startedAt
         waitingSince = startedAt
         phase = .solvingExplanation
@@ -865,7 +953,7 @@ final class AppState: ObservableObject {
             )
             pendingExplanationStarts[solveID] = nil
             requestGate.finish(requestID)
-            apply(generated)
+            if revision == authenticationRevision { apply(generated) }
             saveExplanation(generated.text, for: solveID, basedOnAnswer: answer)
         } catch {
             pendingExplanationStarts[solveID] = nil

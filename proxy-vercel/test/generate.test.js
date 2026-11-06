@@ -121,7 +121,7 @@ test("동시 요청에서도 한도를 넘는 호출은 Gemini에 전달하지 �
 
   assert.equal(calls.length, 2);
   assert.equal(responses.filter((response) => response.statusCode === 200).length, 2);
-  assert.equal(responses.filter((response) => response.statusCode === 429).length, 2);
+  assert.equal(responses.filter((response) => response.statusCode === 409).length, 2);
 });
 
 test("Gemini 실패와 타임아웃은 차감하지 않고 예약을 해제한다", async () => {
