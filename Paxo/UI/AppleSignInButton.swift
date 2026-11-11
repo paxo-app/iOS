@@ -13,6 +13,6 @@ struct AppleSignInButton: View {
         )
         .signInWithAppleButtonStyle(.black)
         .frame(height: 36)
-        .disabled(!appState.isAppleSignInReady)
+        .disabled(!appState.isAppleSignInReady || appState.authenticationPhase == .signingIn)
     }
 }
