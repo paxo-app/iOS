@@ -41,8 +41,7 @@ struct SettingsView: View {
     private var generalSettings: some View {
         Form {
             Section("계정") {
-                switch appState.authenticationPhase {
-                case .signedIn:
+                if appState.authenticationPhase == .signedIn {
                     Label("Apple로 로그인됨", systemImage: "person.crop.circle.badge.checkmark")
                     Button("로그아웃") {
                         appState.signOut()
@@ -50,18 +49,22 @@ struct SettingsView: View {
                     Button("계정 삭제…", role: .destructive) {
                         showsDeleteConfirmation = true
                     }
-                case .failed(let message):
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                    AppleSignInButton()
-                    Button("로그인 다시 준비") {
-                        appState.retryAppleSignInPreparation()
+                } else {
+                    if appState.authenticationPhase == .preparing
+                        || appState.authenticationPhase == .signingIn
+                    {
+                        ProgressView("Apple 로그인을 확인하는 중…")
                     }
-                case .preparing, .signingIn:
-                    ProgressView("Apple 로그인을 확인하는 중…")
-                case .signedOut:
+                    // 인증 요청 중 버튼을 제거하면 Apple 인증 창의 수명도 끊길 수 있다.
                     AppleSignInButton()
+                    if case .failed(let message) = appState.authenticationPhase {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        Button("로그인 다시 준비") {
+                            appState.retryAppleSignInPreparation()
+                        }
+                    }
                 }
                 Text("이름과 이메일은 요청하거나 저장하지 않습니다.")
                     .font(.caption)
