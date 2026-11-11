@@ -4,6 +4,7 @@ import SwiftUI
 struct HistoryArchiveView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showsDetail = false
+    @State private var showsReview = false
     @State private var selectedDate: Date?
     @State private var selectedSubjectKey: String?
     @State private var grouping: HistoryGrouping = .date
@@ -32,7 +33,10 @@ struct HistoryArchiveView: View {
 
     var body: some View {
         Group {
-            if showsDetail {
+            if showsReview {
+                ReviewSessionView(onClose: { showsReview = false })
+                    .padding(20)
+            } else if showsDetail {
                 ResultView(onBack: { showsDetail = false }, backTitle: "풀이 기록으로", isHistory: true)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
@@ -130,9 +134,15 @@ struct HistoryArchiveView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
-            Button("모든 기록 삭제…", role: .destructive) { showsDeleteConfirmation = true }
-                .disabled(appState.isSolving)
-                .help("이 Mac에 보관한 모든 풀이 기록을 삭제합니다.")
+            HStack {
+                Button("오답 다시 풀기 (\(appState.reviewQueue.count))") { showsReview = true }
+                    .disabled(appState.isSolving || appState.reviewQueue.isEmpty)
+                    .help("오답으로 표시한 문제를 정답과 해설을 가린 채 다시 풉니다.")
+                Spacer()
+                Button("모든 기록 삭제…", role: .destructive) { showsDeleteConfirmation = true }
+                    .disabled(appState.isSolving)
+                    .help("이 Mac에 보관한 모든 풀이 기록을 삭제합니다.")
+            }
         }
     }
 
