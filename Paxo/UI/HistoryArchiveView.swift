@@ -31,11 +31,20 @@ struct HistoryArchiveView: View {
         }
     }
 
+    /// 날짜·과목·검색으로 좁힌 상태에서는 지금 보이는 목록의 오답만 다시 푼다.
+    private var scopedReviewQueue: [SolveResult] {
+        HistoryBrowser.reviewQueue(matchingItems)
+    }
+
     var body: some View {
         Group {
             if showsReview {
-                ReviewSessionView(queue: appState.reviewQueue, onClose: { showsReview = false })
-                    .padding(20)
+                ReviewSessionView(
+                    queue: scopedReviewQueue,
+                    subjectName: { appState.subject(for: $0)?.name },
+                    onClose: { showsReview = false }
+                )
+                .padding(20)
             } else if showsDetail {
                 ResultView(onBack: { showsDetail = false }, backTitle: "풀이 기록으로", isHistory: true)
             } else {
@@ -54,6 +63,11 @@ struct HistoryArchiveView: View {
                                 }
                             }
                         )
+                    }
+                    if selectedDate == nil, selectedSubjectKey == nil, query.isEmpty,
+                        !appState.visibleHistory.isEmpty
+                    {
+                        HistorySummaryView(summary: HistoryBrowser.summary(appState.visibleHistory))
                     }
                     HistoryStorageNotice()
                     searchField
@@ -135,9 +149,9 @@ struct HistoryArchiveView: View {
                     .monospacedDigit()
             }
             HStack {
-                Button("오답 다시 풀기 (\(appState.reviewQueue.count))") { showsReview = true }
-                    .disabled(appState.isSolving || appState.reviewQueue.isEmpty)
-                    .help("오답으로 표시한 문제를 정답과 해설을 가린 채 다시 풉니다.")
+                Button("오답 다시 풀기 (\(scopedReviewQueue.count))") { showsReview = true }
+                    .disabled(appState.isSolving || scopedReviewQueue.isEmpty)
+                    .help("지금 보이는 목록에서 오답으로 표시한 문제를 정답과 해설을 가린 채 다시 풉니다.")
                 Spacer()
                 Button("모든 기록 삭제…", role: .destructive) { showsDeleteConfirmation = true }
                     .disabled(appState.isSolving)
@@ -231,7 +245,7 @@ struct HistoryArchiveView: View {
                                 .frame(width: 36)
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(group.name).font(.callout.weight(.semibold))
-                                Text("풀이 \(group.items.count)개")
+                                Text("풀이 \(group.items.count)개 · 오답 \(group.incorrectCount)개")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

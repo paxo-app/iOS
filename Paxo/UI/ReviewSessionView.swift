@@ -3,14 +3,20 @@ import SwiftUI
 /// 시작할 때의 오답 목록을 고정해, 채점할 때마다 순서가 바뀌어 문제를 건너뛰지 않게 한다.
 struct ReviewSessionView: View {
     @EnvironmentObject private var appState: AppState
+    let subjectName: (UUID) -> String?
     let onClose: () -> Void
     @State private var queue: [SolveResult]
     @State private var index = 0
     @State private var isRevealed = false
     @State private var recoveredCount = 0
+    @State private var skippedCount = 0
 
     /// 첫 화면부터 문제가 보이도록 목록을 생성 시점에 받는다.
-    init(queue: [SolveResult], onClose: @escaping () -> Void) {
+    init(
+        queue: [SolveResult], subjectName: @escaping (UUID) -> String? = { _ in nil },
+        onClose: @escaping () -> Void
+    ) {
+        self.subjectName = subjectName
         self.onClose = onClose
         _queue = State(initialValue: queue)
     }
@@ -50,6 +56,14 @@ struct ReviewSessionView: View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 6) {
+                        Text(subjectName(item.id) ?? "미분류")
+                        Text("·")
+                        Text(item.date, format: .dateTime.month().day())
+                        Text("에 틀린 문제")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     problemImage(item)
                     if isRevealed {
                         answer(item)
@@ -79,6 +93,8 @@ struct ReviewSessionView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
+                    Button("건너뛰기") { skip() }
+                        .help("기록을 남기지 않고 다음 문제로 넘어갑니다.")
                     Button("정답 보기") { isRevealed = true }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
@@ -128,7 +144,9 @@ struct ReviewSessionView: View {
             Text(
                 queue.isEmpty
                     ? "기록에서 오답으로 표시한 문제가 여기에 모입니다."
-                    : "또 틀린 문제는 다음 다시 풀기에 남아 있습니다."
+                    : skippedCount > 0
+                        ? "건너뛴 \(skippedCount)문제와 또 틀린 문제는 다음 다시 풀기에 남아 있습니다."
+                        : "또 틀린 문제는 다음 다시 풀기에 남아 있습니다."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -143,6 +161,12 @@ struct ReviewSessionView: View {
         if appState.recordReview(correctness, for: item.id), correctness == .correct {
             recoveredCount += 1
         }
+        isRevealed = false
+        index += 1
+    }
+
+    private func skip() {
+        skippedCount += 1
         isRevealed = false
         index += 1
     }

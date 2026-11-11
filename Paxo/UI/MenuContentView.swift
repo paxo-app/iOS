@@ -145,6 +145,11 @@ struct MenuContentView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    if !appState.reviewQueue.isEmpty {
+                        Text("다시 풀 오답 \(appState.reviewQueue.count)개는 설정의 풀이 기록 탭에서 풀 수 있습니다.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             Divider()
