@@ -34,7 +34,7 @@ struct HistoryArchiveView: View {
     var body: some View {
         Group {
             if showsReview {
-                ReviewSessionView(onClose: { showsReview = false })
+                ReviewSessionView(queue: appState.reviewQueue, onClose: { showsReview = false })
                     .padding(20)
             } else if showsDetail {
                 ResultView(onBack: { showsDetail = false }, backTitle: "풀이 기록으로", isHistory: true)

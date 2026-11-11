@@ -4,11 +4,16 @@ import SwiftUI
 struct ReviewSessionView: View {
     @EnvironmentObject private var appState: AppState
     let onClose: () -> Void
-    @State private var queue: [SolveResult] = []
-    @State private var hasStarted = false
+    @State private var queue: [SolveResult]
     @State private var index = 0
     @State private var isRevealed = false
     @State private var recoveredCount = 0
+
+    /// 첫 화면부터 문제가 보이도록 목록을 생성 시점에 받는다.
+    init(queue: [SolveResult], onClose: @escaping () -> Void) {
+        self.onClose = onClose
+        _queue = State(initialValue: queue)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -20,11 +25,6 @@ struct ReviewSessionView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear {
-            guard !hasStarted else { return }
-            hasStarted = true
-            queue = appState.reviewQueue
-        }
     }
 
     private var header: some View {
