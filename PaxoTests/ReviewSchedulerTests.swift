@@ -92,6 +92,24 @@ struct ReviewSchedulerTests {
         #expect(HistoryBrowser.dueQueue([fresh], now: day(3, hour: 23), calendar: calendar).isEmpty)
     }
 
+    /// 며칠 전에 푼 기록을 오늘 오답으로 표시해도 방금 정답을 본 것이므로 내일부터 복습 차례다.
+    @Test func oldRecordMarkedWrongTodayIsDueTomorrowNotToday() {
+        var item = SolveResult(preset: .general)
+        item.answer = "③"
+        item.date = day(0)
+        item.setCorrectness(.incorrect, at: day(5))
+
+        #expect(!ReviewScheduler.isDue(item, now: day(5, hour: 23), calendar: calendar))
+        #expect(ReviewScheduler.isDue(item, now: day(6, hour: 0, minute: 1), calendar: calendar))
+        // 표시한 날 바로 맞힌 것은 하루만 인정한다.
+        var sameDay = item
+        sameDay.recordReview(.good, at: day(5, hour: 12), calendar: calendar)
+        #expect(sameDay.reviewIntervalDays == 1)
+
+        item.setCorrectness(.correct, at: day(5))
+        #expect(item.markedIncorrectAt == nil)
+    }
+
     /// 한 번 맞히면 복습에서 영구히 빠지던 이전 버전의 기록도 일정에 편입한다.
     @Test func recordsReviewedBeforeSchedulingExistedGetDefaultDueDates() {
         var recovered = wrongAnswer(solvedOn: 0)

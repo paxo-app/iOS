@@ -16,7 +16,7 @@ enum ReviewScheduler {
         grade: ReviewGrade, for item: SolveResult, now: Date = Date(), calendar: Calendar = .current
     ) -> ReviewOutcome {
         let today = calendar.startOfDay(for: now)
-        let lastStudied = calendar.startOfDay(for: item.lastReviewedAt ?? item.date)
+        let lastStudied = calendar.startOfDay(for: item.lastStudiedAt)
         let elapsed = max(calendar.dateComponents([.day], from: lastStudied, to: today).day ?? 0, 0)
         let current = item.reviewIntervalDays ?? 0
         // 예정일 전에 다시 풀면 실제로 지난 날수만큼만 기억을 유지한 것으로 인정한다.
@@ -45,7 +45,7 @@ enum ReviewScheduler {
     /// 일정 필드가 없던 기록도 같은 규칙으로 복습일을 정한다.
     static func dueDate(for item: SolveResult, calendar: Calendar = .current) -> Date {
         if let stored = item.nextReviewAt { return calendar.startOfDay(for: stored) }
-        let base = calendar.startOfDay(for: item.lastReviewedAt ?? item.date)
+        let base = calendar.startOfDay(for: item.lastStudiedAt)
         let days =
             item.lastReviewedAt != nil && item.lastReviewCorrectness == .correct
             ? firstGoodIntervalDays : relearnIntervalDays

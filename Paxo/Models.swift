@@ -167,6 +167,7 @@ struct SolveResult: Identifiable, Codable, Equatable {
     var reviewCount: Int?
     var lastReviewedAt: Date?
     var lastReviewCorrectness: SolveCorrectness?
+    var markedIncorrectAt: Date?
     var reviewIntervalDays: Int?
     var nextReviewAt: Date?
     var reviewRetiredAt: Date?
@@ -207,6 +208,17 @@ struct SolveResult: Identifiable, Codable, Equatable {
         nextReviewAt = outcome.dueAt
         reviewRetiredAt = outcome.isRetired ? date : nil
         return outcome
+    }
+
+    /// 오답으로 표시하려고 기록을 열면 정답을 다시 보게 되므로, 복습 간격은 푼 날이 아니라 표시한 날부터 센다.
+    mutating func setCorrectness(_ value: SolveCorrectness?, at date: Date = Date()) {
+        correctness = value
+        markedIncorrectAt = value == .incorrect ? date : nil
+    }
+
+    /// 마지막으로 정답을 확인한 시점
+    var lastStudiedAt: Date {
+        lastReviewedAt ?? markedIncorrectAt ?? date
     }
 
     /// 한 번 맞힌 뒤에도 간격을 늘려 다시 내므로, 충분히 익혀 복습을 마칠 때까지 대상에 남긴다.

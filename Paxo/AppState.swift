@@ -545,7 +545,7 @@ final class AppState: ObservableObject {
 
     func updateCorrectness(_ correctness: SolveCorrectness) {
         guard let result = current, result.answer != nil else { return }
-        current?.correctness = result.correctness == correctness ? nil : correctness
+        current?.setCorrectness(result.correctness == correctness ? nil : correctness)
         upsertHistory()
     }
 
