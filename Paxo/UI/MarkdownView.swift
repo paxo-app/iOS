@@ -4,10 +4,13 @@ import SwiftUI
 struct MarkdownBlocksView: View {
     let blocks: [MarkdownDocument.Block]
     var fontSize: ResultFontSize = .medium
+    /// 화면 밖에서 그릴 때는 스크롤 영역이 비어 나오므로 넓은 코드와 수식을 줄바꿈한다.
+    var wrapsWideBlocks = false
 
-    init(text: String, fontSize: ResultFontSize = .medium) {
+    init(text: String, fontSize: ResultFontSize = .medium, wrapsWideBlocks: Bool = false) {
         self.blocks = MarkdownDocument.parse(text)
         self.fontSize = fontSize
+        self.wrapsWideBlocks = wrapsWideBlocks
     }
 
     init(blocks: [MarkdownDocument.Block], fontSize: ResultFontSize = .medium) {
@@ -46,13 +49,22 @@ struct MarkdownBlocksView: View {
         case .paragraph(let text):
             prose(text)
         case .code(let text), .formula(let text):
-            ScrollView(.horizontal) {
-                Text(verbatim: text)
-                    .font(fontSize.codeFont)
-                    .fixedSize(horizontal: true, vertical: true)
-                    .padding(12)
+            Group {
+                if wrapsWideBlocks {
+                    Text(verbatim: text)
+                        .font(fontSize.codeFont)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(12)
+                } else {
+                    ScrollView(.horizontal) {
+                        Text(verbatim: text)
+                            .font(fontSize.codeFont)
+                            .fixedSize(horizontal: true, vertical: true)
+                            .padding(12)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
             .accessibilityLabel(block.isCode ? "코드" : "수식")

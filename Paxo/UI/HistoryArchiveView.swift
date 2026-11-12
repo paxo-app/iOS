@@ -5,6 +5,9 @@ struct HistoryArchiveView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showsDetail = false
     @State private var showsReview = false
+    @State private var exportDocument: WrongNoteDocument?
+    @State private var showsExporter = false
+    @State private var exportError: String?
     @State private var selectedDate: Date?
     @State private var selectedSubjectKey: String?
     @State private var grouping: HistoryGrouping = .date
@@ -34,6 +37,10 @@ struct HistoryArchiveView: View {
     /// 날짜·과목·검색으로 좁힌 상태에서는 지금 보이는 목록의 오답만 다시 푼다.
     private var scopedReviewQueue: [SolveResult] {
         HistoryBrowser.reviewQueue(matchingItems)
+    }
+
+    private var scopedWrongItems: [SolveResult] {
+        matchingItems.filter { $0.correctness == .incorrect }
     }
 
     var body: some View {
@@ -75,6 +82,9 @@ struct HistoryArchiveView: View {
                     if let subjectError = appState.subjectError {
                         Text(subjectError).font(.caption).foregroundStyle(.red)
                     }
+                    if let exportError {
+                        Text(exportError).font(.caption).foregroundStyle(.red)
+                    }
                     Text("최근 100개의 풀이와 문제 이미지를 이 Mac에서 다시 볼 수 있습니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -101,6 +111,13 @@ struct HistoryArchiveView: View {
             }
         }
         .tint(PaxoStyle.brand)
+        .fileExporter(
+            isPresented: $showsExporter, document: exportDocument, contentType: .pdf,
+            defaultFilename: "Paxo 오답노트"
+        ) { result in
+            if case .failure = result { exportError = WrongNoteExportError.saveFailed.errorDescription }
+            exportDocument = nil
+        }
         .sheet(isPresented: $showsSubjectManager) {
             SubjectManagementView().environmentObject(appState)
         }
@@ -152,11 +169,30 @@ struct HistoryArchiveView: View {
                 Button("오답 다시 풀기 (\(scopedReviewQueue.count))") { showsReview = true }
                     .disabled(appState.isSolving || scopedReviewQueue.isEmpty)
                     .help("지금 보이는 목록에서 오답으로 표시한 문제를 정답과 해설을 가린 채 다시 풉니다.")
+                Button("오답노트 내보내기") { exportWrongNote() }
+                    .disabled(appState.isSolving || scopedWrongItems.isEmpty)
+                    .help("지금 보이는 목록의 오답을 문제 이미지·정답·해설과 함께 PDF로 저장합니다.")
                 Spacer()
                 Button("모든 기록 삭제…", role: .destructive) { showsDeleteConfirmation = true }
                     .disabled(appState.isSolving)
                     .help("이 Mac에 보관한 모든 풀이 기록을 삭제합니다.")
             }
+        }
+    }
+
+    private func exportWrongNote() {
+        do {
+            let data = try WrongNoteExporter.pdf(
+                items: scopedWrongItems,
+                image: { appState.historyImage(for: $0) },
+                subjectName: { appState.subject(for: $0)?.name }
+            )
+            exportError = nil
+            exportDocument = WrongNoteDocument(data: data)
+            showsExporter = true
+        } catch {
+            exportError =
+                (error as? LocalizedError)?.errorDescription ?? WrongNoteExportError.renderFailed.errorDescription
         }
     }
 
