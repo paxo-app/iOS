@@ -15,9 +15,6 @@ final class OnboardingWindowController {
                 defer: false
             )
             newWindow.title = "Paxo 시작하기"
-            newWindow.titlebarAppearsTransparent = false
-            newWindow.isOpaque = false
-            newWindow.backgroundColor = .clear
             newWindow.isReleasedWhenClosed = false
             newWindow.contentView = NSHostingView(
                 rootView: OnboardingView(onFinish: { [weak self] in

@@ -15,9 +15,6 @@ final class PaywallWindowController {
                 defer: false
             )
             newWindow.title = "풀이권 충전"
-            newWindow.titlebarAppearsTransparent = false
-            newWindow.isOpaque = false
-            newWindow.backgroundColor = .clear
             newWindow.isReleasedWhenClosed = false
             newWindow.contentView = NSHostingView(
                 rootView: PaywallView().environmentObject(store)

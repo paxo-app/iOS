@@ -67,7 +67,6 @@ struct ResultView: View {
         }
         .frame(minWidth: 340, minHeight: 200)
         .disclosureGroupStyle(ResultDisclosureGroupStyle())
-        .paxoSurface()
         .onAppear { showsSavedExplanation = appState.historyShowsExplanation }
         .onChange(of: appState.historyShowsExplanation) {
             showsSavedExplanation = appState.historyShowsExplanation

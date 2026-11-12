@@ -169,7 +169,6 @@ struct MenuContentView: View {
         }
         .padding(16)
         .frame(width: 360)
-        .paxoSurface()
     }
 
 }

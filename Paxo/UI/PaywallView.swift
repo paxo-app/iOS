@@ -93,7 +93,7 @@ struct PaywallView: View {
             .frame(maxWidth: .infinity)
         }
         .frame(width: 420, height: 650)
-        .paxoSurface(cornerRadius: 0)
+        .paxoWindowSurface()
     }
 
     @ViewBuilder
