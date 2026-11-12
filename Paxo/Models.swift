@@ -164,6 +164,9 @@ struct SolveResult: Identifiable, Codable, Equatable {
     var explanationNeedsReview: Bool?
     var imageFileName: String?
     var correctness: SolveCorrectness?
+    var reviewCount: Int?
+    var lastReviewedAt: Date?
+    var lastReviewCorrectness: SolveCorrectness?
 
     init(preset: SubjectPreset) {
         self.preset = preset
@@ -186,6 +189,17 @@ struct SolveResult: Identifiable, Codable, Equatable {
         explanation = value
         explanationNeedsReview = false
         return true
+    }
+
+    /// 첫 채점은 그대로 두고 다시 푼 결과만 따로 남겨 처음 틀린 문제였다는 사실을 보존한다.
+    mutating func recordReview(_ correctness: SolveCorrectness, at date: Date = Date()) {
+        reviewCount = (reviewCount ?? 0) + 1
+        lastReviewedAt = date
+        lastReviewCorrectness = correctness
+    }
+
+    var needsReview: Bool {
+        correctness == .incorrect && lastReviewCorrectness != .correct
     }
 
     mutating func acceptGeneratedExplanation(_ text: String, basedOnAnswer: String) -> Bool {

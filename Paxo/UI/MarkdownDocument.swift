@@ -173,7 +173,30 @@ enum MarkdownDocument {
         return result
     }
 
+    /// CommonMark는 닫는 `**` 앞이 문장부호이고 뒤가 한글이면 강조로 보지 않아 별표가 그대로 남는다.
+    /// "**…(Closed)**를"처럼 조사가 바로 붙는 한국어 해설을 위해 굵은 글씨만 직접 짝을 맞춘다.
     private static func markdown(_ text: String) -> AttributedString {
+        let pattern = #"`+[^`\n]*`+|\*\*(?=\S)([^\n]+?)(?<=\S)\*\*(?!\*)"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return standardMarkdown(text) }
+        var result = AttributedString()
+        var start = text.startIndex
+        for match in expression.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let range = Range(match.range, in: text), let inner = Range(match.range(at: 1), in: text)
+            else { continue }
+            result += standardMarkdown(String(text[start..<range.lowerBound]))
+            var strong = standardMarkdown(String(text[inner]))
+            for range in strong.runs.map(\.range) {
+                let intent = strong[range].inlinePresentationIntent ?? []
+                strong[range].inlinePresentationIntent = intent.union(.stronglyEmphasized)
+            }
+            result += strong
+            start = range.upperBound
+        }
+        result += standardMarkdown(String(text[start...]))
+        return result
+    }
+
+    private static func standardMarkdown(_ text: String) -> AttributedString {
         (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             ?? AttributedString(text)
     }

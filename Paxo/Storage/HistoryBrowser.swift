@@ -29,6 +29,18 @@ enum HistoryBrowser {
         }.sorted { $0.date > $1.date }
     }
 
+    /// 한 번도 다시 풀지 않은 오답을 먼저, 그다음 복습한 지 오래된 순으로 내보낸다.
+    static func reviewQueue(_ items: [SolveResult]) -> [SolveResult] {
+        visible(items).filter(\.needsReview).sorted { left, right in
+            switch (left.lastReviewedAt, right.lastReviewedAt) {
+            case (nil, nil): return left.date < right.date
+            case (nil, _): return true
+            case (_, nil): return false
+            case (let leftDate?, let rightDate?): return leftDate < rightDate
+            }
+        }
+    }
+
     static func days(_ items: [SolveResult], calendar: Calendar = .current) -> [HistoryDay] {
         Dictionary(grouping: items) { calendar.startOfDay(for: $0.date) }
             .map { HistoryDay(date: $0.key, items: $0.value.sorted { $0.date > $1.date }) }

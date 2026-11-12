@@ -67,6 +67,16 @@ struct MarkdownDocumentTests {
         #expect(String(MarkdownDocument.inline("**강조 `코드` 유지**").characters) == "강조 코드 유지")
     }
 
+    /// 닫는 별표 앞이 괄호이고 뒤에 조사가 붙으면 표준 파서는 별표를 그대로 남긴다.
+    @Test func boldEndingWithPunctuationBeforeKoreanParticleIsEmphasized() {
+        let result = MarkdownDocument.inline("OCP는 **확장에는 열려 있고(Open), 수정에는 닫혀(Closed)**있어야 한다")
+        #expect(String(result.characters) == "OCP는 확장에는 열려 있고(Open), 수정에는 닫혀(Closed)있어야 한다")
+        let strong = result.runs.filter { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true }
+        #expect(strong.map { String(result[$0.range].characters) }.joined() == "확장에는 열려 있고(Open), 수정에는 닫혀(Closed)")
+        #expect(String(MarkdownDocument.inline("`a ** b ** c`와 2 * 3 * 4").characters) == "a ** b ** c와 2 * 3 * 4")
+        #expect(String(MarkdownDocument.inline("***굵은 기울임***").characters) == "굵은 기울임")
+    }
+
     @Test func groupsKnownSectionsAndOmitsEmptyAlternatives() {
         let source = "## 핵심 해설\n풀이\n\n## 오답인 이유\n\n## 추천 학습 내용\n복습"
         #expect(

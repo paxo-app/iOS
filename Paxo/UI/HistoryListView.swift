@@ -51,6 +51,12 @@ struct HistoryCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 correctnessBadge
+                if let count = item.reviewCount, count > 0 {
+                    Text(item.lastReviewCorrectness == .correct ? "다시 풀어 맞힘" : "다시 풀기 \(count)회")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Spacer(minLength: 4)
                 Text(item.date, format: .dateTime.year().month(.twoDigits).day(.twoDigits).hour().minute())
                     .font(.caption2)

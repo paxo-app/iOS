@@ -71,6 +71,10 @@ final class AppState: ObservableObject {
     var visibleHistory: [SolveResult] {
         HistoryBrowser.visible(history)
     }
+
+    var reviewQueue: [SolveResult] {
+        HistoryBrowser.reviewQueue(history)
+    }
     @Published var captureMode: CaptureMode {
         didSet { UserDefaults.standard.set(captureMode.rawValue, forKey: "captureMode") }
     }
@@ -539,6 +543,16 @@ final class AppState: ObservableObject {
         guard let result = current, result.answer != nil else { return }
         current?.correctness = result.correctness == correctness ? nil : correctness
         upsertHistory()
+    }
+
+    @discardableResult
+    func recordReview(_ correctness: SolveCorrectness, for id: UUID) -> Bool {
+        guard !isSolving, !historyLoadFailed, let index = history.firstIndex(where: { $0.id == id })
+        else { return false }
+        history[index].recordReview(correctness)
+        if current?.id == id { current = history[index] }
+        persistHistory()
+        return true
     }
 
     @discardableResult
