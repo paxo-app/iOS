@@ -25,9 +25,6 @@ final class ResultPanelController {
             )
             newPanel.title = "Paxo"
             newPanel.level = .floating
-            newPanel.titlebarAppearsTransparent = false
-            newPanel.isOpaque = false
-            newPanel.backgroundColor = .clear
             newPanel.minSize = NSSize(width: 360, height: 300)
             newPanel.isReleasedWhenClosed = false
             newPanel.hidesOnDeactivate = false
@@ -130,7 +127,7 @@ private struct ResultPanelContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .paxoSurface(cornerRadius: 0)
+        .paxoWindowSurface()
     }
 }
 

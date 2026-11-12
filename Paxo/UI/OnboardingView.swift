@@ -45,7 +45,7 @@ struct OnboardingView: View {
         }
         .padding(28)
         .frame(width: 440, height: 440)
-        .paxoSurface(cornerRadius: 0)
+        .paxoWindowSurface()
         .onReceive(
             NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
         ) { _ in

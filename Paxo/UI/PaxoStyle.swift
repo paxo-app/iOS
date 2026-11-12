@@ -8,32 +8,32 @@ enum PaxoStyle {
 }
 
 extension View {
-    func paxoSurface(
-        cornerRadius: CGFloat = PaxoStyle.cornerRadius, isOpaque: Bool = false
-    ) -> some View {
-        background {
-            if isOpaque {
-                Color(nsColor: .windowBackgroundColor)
-            } else {
-                PaxoGlassBackground()
-            }
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .strokeBorder(.primary.opacity(0.1), lineWidth: 0.5)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-        .tint(PaxoStyle.brand)
+    /// 잠깐 떴다 사라지는 화면(메뉴바 팝오버, 토스트)에만 쓴다. 머물러 읽는 창은 `paxoWindowSurface()`를 쓴다.
+    func paxoGlassSurface(cornerRadius: CGFloat = PaxoStyle.cornerRadius) -> some View {
+        paxoSurface(cornerRadius: cornerRadius) { PaxoGlassBackground() }
     }
 
+    /// 창 루트에 한 번만 붙인다. 안에 들어가는 화면은 배경을 따로 깔지 않아야 어느 창에서든 그 창의 배경을 따른다.
     func paxoWindowSurface() -> some View {
-        paxoSurface(cornerRadius: 0, isOpaque: true)
+        paxoSurface(cornerRadius: 0) { Color(nsColor: .windowBackgroundColor) }
             .background(PaxoWindowBackground())
             .toolbarBackground(.hidden, for: .windowToolbar)
     }
+
+    private func paxoSurface<Fill: View>(
+        cornerRadius: CGFloat, @ViewBuilder fill: () -> Fill
+    ) -> some View {
+        background { fill() }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(.primary.opacity(0.1), lineWidth: 0.5)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .tint(PaxoStyle.brand)
+    }
 }
 
-/// 설정 창의 기본 제목 표시줄이 본문과 별개로 배경을 흐리지 않게 한다.
+/// 제목 표시줄이 본문과 다른 배경으로 그려지지 않도록 창 자체를 불투명하게 맞춘다.
 private struct PaxoWindowBackground: NSViewRepresentable {
     func makeNSView(context: Context) -> WindowBackgroundView {
         WindowBackgroundView()

@@ -7,6 +7,7 @@ struct PaxoApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuContentView()
+                .paxoGlassSurface()
                 .environmentObject(AppState.shared)
                 .environmentObject(AppState.shared.store)
         } label: {

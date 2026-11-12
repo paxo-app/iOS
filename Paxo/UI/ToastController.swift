@@ -105,7 +105,7 @@ private struct ToastView: View {
             .padding(.vertical, 14)
             // 말풍선이 정해진 창 크기를 채워야 창 위치와 말풍선 위치가 같다.
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .paxoSurface(cornerRadius: 16)
+            .paxoGlassSurface(cornerRadius: 16)
     }
 
     @ViewBuilder
