@@ -151,6 +151,11 @@ struct ReviewSessionView: View {
             Image(systemName: queue.isEmpty ? "checkmark.circle" : "flag.checkered")
                 .font(.largeTitle)
                 .foregroundStyle(PaxoStyle.brand)
+            if let lastFeedback {
+                Text(lastFeedback)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Text(queue.isEmpty ? "지금 복습할 문제가 없어요" : "\(queue.count)문제 중 \(recoveredCount)문제를 맞혔어요")
                 .font(.callout.weight(.medium))
             Text(

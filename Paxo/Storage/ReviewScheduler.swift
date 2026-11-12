@@ -46,8 +46,10 @@ enum ReviewScheduler {
     static func dueDate(for item: SolveResult, calendar: Calendar = .current) -> Date {
         if let stored = item.nextReviewAt { return calendar.startOfDay(for: stored) }
         let base = calendar.startOfDay(for: item.lastStudiedAt)
+        // 마지막 복습 뒤에 오답으로 다시 표시했다면 그 복습 결과는 이어 가지 않는다.
+        let continuesReview = item.lastReviewedAt.map { $0 >= (item.markedIncorrectAt ?? $0) } ?? false
         let days =
-            item.lastReviewedAt != nil && item.lastReviewCorrectness == .correct
+            continuesReview && item.lastReviewCorrectness == .correct
             ? firstGoodIntervalDays : relearnIntervalDays
         return calendar.date(byAdding: .day, value: days, to: base) ?? base
     }

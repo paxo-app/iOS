@@ -110,6 +110,20 @@ struct ReviewSchedulerTests {
         #expect(item.markedIncorrectAt == nil)
     }
 
+    @Test func remarkingWrongAfterUnmarkingStartsScheduleOver() {
+        var item = wrongAnswer(solvedOn: 0)
+        item.setCorrectness(.incorrect, at: day(0))
+        item.recordReview(.good, at: day(1), calendar: calendar)
+        item.recordReview(.good, at: day(4), calendar: calendar)
+        #expect(item.reviewIntervalDays == 8)
+
+        item.setCorrectness(nil, at: day(5))
+        item.setCorrectness(.incorrect, at: day(9))
+        #expect(item.reviewIntervalDays == nil)
+        #expect(ReviewScheduler.dueDate(for: item, calendar: calendar) == day(10, hour: 0))
+        #expect(!ReviewScheduler.isDue(item, now: day(9, hour: 23), calendar: calendar))
+    }
+
     /// 한 번 맞히면 복습에서 영구히 빠지던 이전 버전의 기록도 일정에 편입한다.
     @Test func recordsReviewedBeforeSchedulingExistedGetDefaultDueDates() {
         var recovered = wrongAnswer(solvedOn: 0)

@@ -214,11 +214,15 @@ struct SolveResult: Identifiable, Codable, Equatable {
     mutating func setCorrectness(_ value: SolveCorrectness?, at date: Date = Date()) {
         correctness = value
         markedIncorrectAt = value == .incorrect ? date : nil
+        // 표시를 풀었다 다시 하면 예전 일정을 이어 가지 않고 처음부터 다시 잡는다.
+        reviewIntervalDays = nil
+        nextReviewAt = nil
+        reviewRetiredAt = nil
     }
 
-    /// 마지막으로 정답을 확인한 시점
+    /// 마지막으로 정답을 확인한 시점. 복습과 오답 표시 중 더 늦은 쪽이다.
     var lastStudiedAt: Date {
-        lastReviewedAt ?? markedIncorrectAt ?? date
+        [lastReviewedAt, markedIncorrectAt].compactMap { $0 }.max() ?? date
     }
 
     /// 한 번 맞힌 뒤에도 간격을 늘려 다시 내므로, 충분히 익혀 복습을 마칠 때까지 대상에 남긴다.
