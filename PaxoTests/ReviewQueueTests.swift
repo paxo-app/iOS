@@ -47,6 +47,37 @@ struct ReviewQueueTests {
         #expect(queue.map(\.id) == [oldWrong.id, newWrong.id, reviewedLongAgo.id, reviewedRecently.id])
     }
 
+    @Test func summaryCountsThisWeekAndReviewProgress() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Seoul"))
+        calendar.firstWeekday = 2
+        // 2026-11-11은 수요일이라 같은 주는 11-09(월)부터다.
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 12)))
+        let monday = try #require(calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 0)))
+        let lastSunday = monday.addingTimeInterval(-1)
+
+        let thisWeekCorrect = result(.correct, solvedAt: now.timeIntervalSince1970)
+        let thisWeekWrong = result(.incorrect, solvedAt: monday.timeIntervalSince1970)
+        var lastWeekRecovered = result(.incorrect, solvedAt: lastSunday.timeIntervalSince1970)
+        lastWeekRecovered.recordReview(.correct, at: now)
+        let lastWeekUngraded = result(nil, solvedAt: lastSunday.timeIntervalSince1970 - 100)
+
+        let summary = HistoryBrowser.summary(
+            [thisWeekCorrect, thisWeekWrong, lastWeekRecovered, lastWeekUngraded], now: now, calendar: calendar
+        )
+        #expect(summary == HistorySummary(solvedThisWeek: 2, incorrect: 2, recovered: 1, pendingReview: 1))
+    }
+
+    @Test func narrowedListReviewsOnlyItsOwnWrongAnswers() {
+        let inScope = result(.incorrect, solvedAt: 10)
+        let outOfScope = result(.incorrect, solvedAt: 20)
+        let group = HistorySubjectGroup(subjectID: UUID(), name: "수학", items: [inScope, result(.correct, solvedAt: 5)])
+
+        #expect(HistoryBrowser.reviewQueue(group.items).map(\.id) == [inScope.id])
+        #expect(HistoryBrowser.reviewQueue([inScope, outOfScope]).count == 2)
+        #expect(group.incorrectCount == 1)
+    }
+
     /// 복습 필드가 없던 버전의 기록이 그대로 열려야 기존 사용자의 기록이 사라지지 않는다.
     @Test func recordsSavedBeforeReviewFieldsStillDecode() throws {
         let legacy = """

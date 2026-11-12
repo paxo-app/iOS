@@ -41,6 +41,18 @@ enum HistoryBrowser {
         }
     }
 
+    /// 주의 시작 요일은 기기의 달력을 따른다.
+    static func summary(_ items: [SolveResult], now: Date = Date(), calendar: Calendar = .current) -> HistorySummary {
+        let shown = visible(items)
+        let week = calendar.dateInterval(of: .weekOfYear, for: now)
+        return HistorySummary(
+            solvedThisWeek: shown.filter { week?.contains($0.date) == true }.count,
+            incorrect: shown.filter { $0.correctness == .incorrect }.count,
+            recovered: shown.filter { $0.correctness == .incorrect && $0.lastReviewCorrectness == .correct }.count,
+            pendingReview: shown.filter(\.needsReview).count
+        )
+    }
+
     static func days(_ items: [SolveResult], calendar: Calendar = .current) -> [HistoryDay] {
         Dictionary(grouping: items) { calendar.startOfDay(for: $0.date) }
             .map { HistoryDay(date: $0.key, items: $0.value.sorted { $0.date > $1.date }) }
@@ -71,4 +83,12 @@ struct HistorySubjectGroup: Identifiable {
     let name: String
     let items: [SolveResult]
     var id: String { subjectID?.uuidString ?? "unclassified" }
+    var incorrectCount: Int { items.filter { $0.correctness == .incorrect }.count }
+}
+
+struct HistorySummary: Equatable {
+    let solvedThisWeek: Int
+    let incorrect: Int
+    let recovered: Int
+    let pendingReview: Int
 }
