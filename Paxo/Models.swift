@@ -167,6 +167,10 @@ struct SolveResult: Identifiable, Codable, Equatable {
     var reviewCount: Int?
     var lastReviewedAt: Date?
     var lastReviewCorrectness: SolveCorrectness?
+    var markedIncorrectAt: Date?
+    var reviewIntervalDays: Int?
+    var nextReviewAt: Date?
+    var reviewRetiredAt: Date?
 
     init(preset: SubjectPreset) {
         self.preset = preset
@@ -192,14 +196,38 @@ struct SolveResult: Identifiable, Codable, Equatable {
     }
 
     /// 첫 채점은 그대로 두고 다시 푼 결과만 따로 남겨 처음 틀린 문제였다는 사실을 보존한다.
-    mutating func recordReview(_ correctness: SolveCorrectness, at date: Date = Date()) {
+    @discardableResult
+    mutating func recordReview(
+        _ grade: ReviewGrade, at date: Date = Date(), calendar: Calendar = .current
+    ) -> ReviewOutcome {
+        let outcome = ReviewScheduler.next(grade: grade, for: self, now: date, calendar: calendar)
         reviewCount = (reviewCount ?? 0) + 1
         lastReviewedAt = date
-        lastReviewCorrectness = correctness
+        lastReviewCorrectness = grade == .again ? .incorrect : .correct
+        reviewIntervalDays = outcome.intervalDays
+        nextReviewAt = outcome.dueAt
+        reviewRetiredAt = outcome.isRetired ? date : nil
+        return outcome
     }
 
+    /// 오답으로 표시하려고 기록을 열면 정답을 다시 보게 되므로, 복습 간격은 푼 날이 아니라 표시한 날부터 센다.
+    mutating func setCorrectness(_ value: SolveCorrectness?, at date: Date = Date()) {
+        correctness = value
+        markedIncorrectAt = value == .incorrect ? date : nil
+        // 표시를 풀었다 다시 하면 예전 일정을 이어 가지 않고 처음부터 다시 잡는다.
+        reviewIntervalDays = nil
+        nextReviewAt = nil
+        reviewRetiredAt = nil
+    }
+
+    /// 마지막으로 정답을 확인한 시점. 복습과 오답 표시 중 더 늦은 쪽이다.
+    var lastStudiedAt: Date {
+        [lastReviewedAt, markedIncorrectAt].compactMap { $0 }.max() ?? date
+    }
+
+    /// 한 번 맞힌 뒤에도 간격을 늘려 다시 내므로, 충분히 익혀 복습을 마칠 때까지 대상에 남긴다.
     var needsReview: Bool {
-        correctness == .incorrect && lastReviewCorrectness != .correct
+        correctness == .incorrect && reviewRetiredAt == nil
     }
 
     mutating func acceptGeneratedExplanation(_ text: String, basedOnAnswer: String) -> Bool {

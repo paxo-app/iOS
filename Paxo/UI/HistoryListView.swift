@@ -51,8 +51,8 @@ struct HistoryCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 correctnessBadge
-                if let count = item.reviewCount, count > 0 {
-                    Text(item.lastReviewCorrectness == .correct ? "다시 풀어 맞힘" : "다시 풀기 \(count)회")
+                if let status = ReviewScheduler.statusText(for: item) {
+                    Text(status)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
