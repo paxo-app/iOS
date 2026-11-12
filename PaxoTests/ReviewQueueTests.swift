@@ -17,34 +17,39 @@ struct ReviewQueueTests {
         let first = Date(timeIntervalSince1970: 100)
         let second = Date(timeIntervalSince1970: 200)
 
-        item.recordReview(.incorrect, at: first)
+        item.recordReview(.again, at: first)
         #expect(item.reviewCount == 1)
-        #expect(item.needsReview)
+        #expect(item.lastReviewCorrectness == .incorrect)
 
-        item.recordReview(.correct, at: second)
+        item.recordReview(.good, at: second)
         #expect(item.reviewCount == 2)
         #expect(item.lastReviewedAt == second)
         #expect(item.lastReviewCorrectness == .correct)
         #expect(item.correctness == .incorrect)
-        #expect(!item.needsReview)
+        // 한 번 맞혀도 간격을 늘려 다시 내야 하므로 복습 대상에 남는다.
+        #expect(item.needsReview)
     }
 
-    @Test func queueHoldsOnlyUnrecoveredWrongAnswersOldestReviewFirst() {
+    @Test func queueHoldsUnfinishedWrongAnswersOldestReviewFirst() {
         let correct = result(.correct, solvedAt: 1)
         let ungraded = result(nil, solvedAt: 2)
         let newWrong = result(.incorrect, solvedAt: 30)
         let oldWrong = result(.incorrect, solvedAt: 10)
         var reviewedLongAgo = result(.incorrect, solvedAt: 5)
-        reviewedLongAgo.recordReview(.incorrect, at: Date(timeIntervalSince1970: 40))
+        reviewedLongAgo.recordReview(.again, at: Date(timeIntervalSince1970: 40))
         var reviewedRecently = result(.incorrect, solvedAt: 6)
-        reviewedRecently.recordReview(.incorrect, at: Date(timeIntervalSince1970: 50))
+        reviewedRecently.recordReview(.again, at: Date(timeIntervalSince1970: 50))
         var recovered = result(.incorrect, solvedAt: 7)
-        recovered.recordReview(.correct, at: Date(timeIntervalSince1970: 60))
+        recovered.recordReview(.good, at: Date(timeIntervalSince1970: 60))
+        var finished = result(.incorrect, solvedAt: 8)
+        finished.reviewRetiredAt = Date(timeIntervalSince1970: 70)
 
         let queue = HistoryBrowser.reviewQueue([
-            correct, ungraded, reviewedRecently, newWrong, recovered, reviewedLongAgo, oldWrong,
+            correct, ungraded, reviewedRecently, newWrong, recovered, finished, reviewedLongAgo, oldWrong,
         ])
-        #expect(queue.map(\.id) == [oldWrong.id, newWrong.id, reviewedLongAgo.id, reviewedRecently.id])
+        #expect(
+            queue.map(\.id) == [oldWrong.id, newWrong.id, reviewedLongAgo.id, reviewedRecently.id, recovered.id]
+        )
     }
 
     @Test func summaryCountsThisWeekAndReviewProgress() throws {
@@ -59,13 +64,17 @@ struct ReviewQueueTests {
         let thisWeekCorrect = result(.correct, solvedAt: now.timeIntervalSince1970)
         let thisWeekWrong = result(.incorrect, solvedAt: monday.timeIntervalSince1970)
         var lastWeekRecovered = result(.incorrect, solvedAt: lastSunday.timeIntervalSince1970)
-        lastWeekRecovered.recordReview(.correct, at: now)
+        lastWeekRecovered.recordReview(.good, at: now, calendar: calendar)
+        var lastWeekFinished = result(.incorrect, solvedAt: lastSunday.timeIntervalSince1970 - 50)
+        lastWeekFinished.reviewRetiredAt = now
         let lastWeekUngraded = result(nil, solvedAt: lastSunday.timeIntervalSince1970 - 100)
 
         let summary = HistoryBrowser.summary(
-            [thisWeekCorrect, thisWeekWrong, lastWeekRecovered, lastWeekUngraded], now: now, calendar: calendar
+            [thisWeekCorrect, thisWeekWrong, lastWeekRecovered, lastWeekFinished, lastWeekUngraded],
+            now: now, calendar: calendar
         )
-        #expect(summary == HistorySummary(solvedThisWeek: 2, incorrect: 2, recovered: 1, pendingReview: 1))
+        // 월요일에 틀린 문제만 복습 차례다. 오늘 맞힌 문제는 3일 뒤로 밀리고 마친 문제는 빠진다.
+        #expect(summary == HistorySummary(solvedThisWeek: 2, incorrect: 3, retired: 1, dueToday: 1))
     }
 
     @Test func narrowedListReviewsOnlyItsOwnWrongAnswers() {
@@ -88,7 +97,7 @@ struct ReviewQueueTests {
         #expect(decoded.needsReview)
 
         var reviewed = decoded
-        reviewed.recordReview(.correct)
+        reviewed.recordReview(.good)
         let roundTrip = try JSONDecoder().decode(SolveResult.self, from: JSONEncoder().encode(reviewed))
         #expect(roundTrip == reviewed)
     }

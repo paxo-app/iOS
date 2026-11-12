@@ -29,7 +29,18 @@ enum HistoryBrowser {
         }.sorted { $0.date > $1.date }
     }
 
-    /// 한 번도 다시 풀지 않은 오답을 먼저, 그다음 복습한 지 오래된 순으로 내보낸다.
+    /// 오늘까지 예정된 문제만, 가장 오래 밀린 것부터 내보낸다.
+    static func dueQueue(_ items: [SolveResult], now: Date = Date(), calendar: Calendar = .current) -> [SolveResult] {
+        visible(items)
+            .filter { ReviewScheduler.isDue($0, now: now, calendar: calendar) }
+            .sorted {
+                let left = ReviewScheduler.dueDate(for: $0, calendar: calendar)
+                let right = ReviewScheduler.dueDate(for: $1, calendar: calendar)
+                return left == right ? $0.date < $1.date : left < right
+            }
+    }
+
+    /// 일정과 무관하게 복습을 마치지 않은 오답 전체. 한 번도 다시 풀지 않은 것을 먼저 낸다.
     static func reviewQueue(_ items: [SolveResult]) -> [SolveResult] {
         visible(items).filter(\.needsReview).sorted { left, right in
             switch (left.lastReviewedAt, right.lastReviewedAt) {
@@ -48,8 +59,8 @@ enum HistoryBrowser {
         return HistorySummary(
             solvedThisWeek: shown.filter { week?.contains($0.date) == true }.count,
             incorrect: shown.filter { $0.correctness == .incorrect }.count,
-            recovered: shown.filter { $0.correctness == .incorrect && $0.lastReviewCorrectness == .correct }.count,
-            pendingReview: shown.filter(\.needsReview).count
+            retired: shown.filter { $0.correctness == .incorrect && $0.reviewRetiredAt != nil }.count,
+            dueToday: shown.filter { ReviewScheduler.isDue($0, now: now, calendar: calendar) }.count
         )
     }
 
@@ -89,6 +100,6 @@ struct HistorySubjectGroup: Identifiable {
 struct HistorySummary: Equatable {
     let solvedThisWeek: Int
     let incorrect: Int
-    let recovered: Int
-    let pendingReview: Int
+    let retired: Int
+    let dueToday: Int
 }

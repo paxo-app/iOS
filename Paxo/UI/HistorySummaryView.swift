@@ -8,8 +8,8 @@ struct HistorySummaryView: View {
         HStack(spacing: 8) {
             tile("이번 주 풀이", summary.solvedThisWeek)
             tile("오답", summary.incorrect)
-            tile("다시 맞힘", summary.recovered)
-            tile("복습 남음", summary.pendingReview, isEmphasized: summary.pendingReview > 0)
+            tile("복습 완료", summary.retired)
+            tile("오늘 복습", summary.dueToday, isEmphasized: summary.dueToday > 0)
         }
         .accessibilityElement(children: .combine)
     }

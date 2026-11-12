@@ -78,7 +78,7 @@ private struct WrongNotePage: View {
                 Text(item.date, format: .dateTime.year().month().day())
                 if let count = item.reviewCount, count > 0 {
                     Text("·")
-                    Text(item.lastReviewCorrectness == .correct ? "다시 풀어 맞힘" : "다시 풀기 \(count)회")
+                    Text(item.reviewRetiredAt != nil ? "복습 완료" : "다시 풀기 \(count)회")
                 }
             }
             .font(.caption)

@@ -5,6 +5,7 @@ struct HistoryArchiveView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showsDetail = false
     @State private var showsReview = false
+    @State private var reviewsDueOnly = true
     @State private var exportDocument: WrongNoteDocument?
     @State private var showsExporter = false
     @State private var exportError: String?
@@ -39,6 +40,10 @@ struct HistoryArchiveView: View {
         HistoryBrowser.reviewQueue(matchingItems)
     }
 
+    private var scopedDueQueue: [SolveResult] {
+        HistoryBrowser.dueQueue(matchingItems)
+    }
+
     private var scopedWrongItems: [SolveResult] {
         matchingItems.filter { $0.correctness == .incorrect }
     }
@@ -47,7 +52,8 @@ struct HistoryArchiveView: View {
         Group {
             if showsReview {
                 ReviewSessionView(
-                    queue: scopedReviewQueue,
+                    title: reviewsDueOnly ? "오늘 복습" : "오답 다시 풀기",
+                    queue: reviewsDueOnly ? scopedDueQueue : scopedReviewQueue,
                     subjectName: { appState.subject(for: $0)?.name },
                     onClose: { showsReview = false }
                 )
@@ -166,9 +172,22 @@ struct HistoryArchiveView: View {
                     .monospacedDigit()
             }
             HStack {
-                Button("오답 다시 풀기 (\(scopedReviewQueue.count))") { showsReview = true }
-                    .disabled(appState.isSolving || scopedReviewQueue.isEmpty)
-                    .help("지금 보이는 목록에서 오답으로 표시한 문제를 정답과 해설을 가린 채 다시 풉니다.")
+                Button("오늘 복습 (\(scopedDueQueue.count))") {
+                    reviewsDueOnly = true
+                    showsReview = true
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(appState.isSolving || scopedDueQueue.isEmpty)
+                .help("오늘까지 복습할 차례가 된 문제만 정답과 해설을 가린 채 다시 풉니다.")
+                Button("오답 다시 풀기 (\(scopedReviewQueue.count))") {
+                    reviewsDueOnly = false
+                    showsReview = true
+                }
+                .disabled(appState.isSolving || scopedReviewQueue.isEmpty)
+                .help("복습 차례와 관계없이 지금 보이는 목록에서 복습을 마치지 않은 오답을 모두 다시 풉니다.")
+                Spacer()
+            }
+            HStack {
                 Button("오답노트 내보내기") { exportWrongNote() }
                     .disabled(appState.isSolving || scopedWrongItems.isEmpty)
                     .help("지금 보이는 목록의 오답을 문제 이미지·정답·해설과 함께 PDF로 저장합니다.")

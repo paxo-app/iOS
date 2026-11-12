@@ -3,6 +3,7 @@ import SwiftUI
 /// 시작할 때의 오답 목록을 고정해, 채점할 때마다 순서가 바뀌어 문제를 건너뛰지 않게 한다.
 struct ReviewSessionView: View {
     @EnvironmentObject private var appState: AppState
+    let title: String
     let subjectName: (UUID) -> String?
     let onClose: () -> Void
     @State private var queue: [SolveResult]
@@ -10,12 +11,14 @@ struct ReviewSessionView: View {
     @State private var isRevealed = false
     @State private var recoveredCount = 0
     @State private var skippedCount = 0
+    @State private var lastFeedback: String?
 
     /// 첫 화면부터 문제가 보이도록 목록을 생성 시점에 받는다.
     init(
-        queue: [SolveResult], subjectName: @escaping (UUID) -> String? = { _ in nil },
-        onClose: @escaping () -> Void
+        title: String = "오답 다시 풀기", queue: [SolveResult],
+        subjectName: @escaping (UUID) -> String? = { _ in nil }, onClose: @escaping () -> Void
     ) {
+        self.title = title
         self.subjectName = subjectName
         self.onClose = onClose
         _queue = State(initialValue: queue)
@@ -41,7 +44,7 @@ struct ReviewSessionView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             HStack {
-                Text("오답 다시 풀기").font(.title2.bold())
+                Text(title).font(.title2.bold())
                 Spacer()
                 if index < queue.count {
                     Text("\(index + 1) / \(queue.count)")
@@ -54,6 +57,11 @@ struct ReviewSessionView: View {
 
     private func problem(_ item: SolveResult) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let lastFeedback {
+                Label(lastFeedback, systemImage: "calendar.badge.clock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
@@ -80,8 +88,12 @@ struct ReviewSessionView: View {
                 HStack(spacing: 8) {
                     Text("다시 풀어 보니").font(.callout).foregroundStyle(.secondary)
                     Spacer()
-                    Button("또 틀렸어요") { grade(.incorrect, item) }
-                    Button("맞았어요") { grade(.correct, item) }
+                    Button("또 틀렸어요") { grade(.again, item) }
+                        .help("내일 다시 나옵니다.")
+                    Button("헷갈렸어요") { grade(.hard, item) }
+                        .help("맞혔지만 확신이 없었다면 고르세요. 비슷한 간격으로 다시 나옵니다.")
+                    Button("맞았어요") { grade(.good, item) }
+                        .help("간격을 늘려 다시 나옵니다.")
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                 }
@@ -139,14 +151,14 @@ struct ReviewSessionView: View {
             Image(systemName: queue.isEmpty ? "checkmark.circle" : "flag.checkered")
                 .font(.largeTitle)
                 .foregroundStyle(PaxoStyle.brand)
-            Text(queue.isEmpty ? "다시 풀 오답이 없어요" : "\(queue.count)문제 중 \(recoveredCount)문제를 다시 맞혔어요")
+            Text(queue.isEmpty ? "지금 복습할 문제가 없어요" : "\(queue.count)문제 중 \(recoveredCount)문제를 맞혔어요")
                 .font(.callout.weight(.medium))
             Text(
                 queue.isEmpty
-                    ? "기록에서 오답으로 표시한 문제가 여기에 모입니다."
+                    ? "오답으로 표시한 문제는 다음 날부터 복습 차례가 됩니다."
                     : skippedCount > 0
-                        ? "건너뛴 \(skippedCount)문제와 또 틀린 문제는 다음 다시 풀기에 남아 있습니다."
-                        : "또 틀린 문제는 다음 다시 풀기에 남아 있습니다."
+                        ? "맞힌 문제는 간격을 늘려, 틀린 문제는 내일 다시 나옵니다. 건너뛴 \(skippedCount)문제는 그대로 남아 있습니다."
+                        : "맞힌 문제는 간격을 늘려, 틀린 문제는 내일 다시 나옵니다."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -156,16 +168,23 @@ struct ReviewSessionView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func grade(_ correctness: SolveCorrectness, _ item: SolveResult) {
+    private func grade(_ grade: ReviewGrade, _ item: SolveResult) {
         // 세션 도중 삭제된 기록은 저장하지 않고 다음 문제로 넘어간다.
-        if appState.recordReview(correctness, for: item.id), correctness == .correct {
-            recoveredCount += 1
+        if let outcome = appState.recordReview(grade, for: item.id) {
+            if grade != .again { recoveredCount += 1 }
+            lastFeedback =
+                outcome.isRetired
+                ? "방금 문제는 복습을 마쳤어요. 더 나오지 않아요."
+                : "방금 문제는 \(outcome.intervalDays)일 뒤에 다시 나와요."
+        } else {
+            lastFeedback = nil
         }
         isRevealed = false
         index += 1
     }
 
     private func skip() {
+        lastFeedback = nil
         skippedCount += 1
         isRevealed = false
         index += 1

@@ -167,6 +167,9 @@ struct SolveResult: Identifiable, Codable, Equatable {
     var reviewCount: Int?
     var lastReviewedAt: Date?
     var lastReviewCorrectness: SolveCorrectness?
+    var reviewIntervalDays: Int?
+    var nextReviewAt: Date?
+    var reviewRetiredAt: Date?
 
     init(preset: SubjectPreset) {
         self.preset = preset
@@ -192,14 +195,23 @@ struct SolveResult: Identifiable, Codable, Equatable {
     }
 
     /// 첫 채점은 그대로 두고 다시 푼 결과만 따로 남겨 처음 틀린 문제였다는 사실을 보존한다.
-    mutating func recordReview(_ correctness: SolveCorrectness, at date: Date = Date()) {
+    @discardableResult
+    mutating func recordReview(
+        _ grade: ReviewGrade, at date: Date = Date(), calendar: Calendar = .current
+    ) -> ReviewOutcome {
+        let outcome = ReviewScheduler.next(grade: grade, for: self, now: date, calendar: calendar)
         reviewCount = (reviewCount ?? 0) + 1
         lastReviewedAt = date
-        lastReviewCorrectness = correctness
+        lastReviewCorrectness = grade == .again ? .incorrect : .correct
+        reviewIntervalDays = outcome.intervalDays
+        nextReviewAt = outcome.dueAt
+        reviewRetiredAt = outcome.isRetired ? date : nil
+        return outcome
     }
 
+    /// 한 번 맞힌 뒤에도 간격을 늘려 다시 내므로, 충분히 익혀 복습을 마칠 때까지 대상에 남긴다.
     var needsReview: Bool {
-        correctness == .incorrect && lastReviewCorrectness != .correct
+        correctness == .incorrect && reviewRetiredAt == nil
     }
 
     mutating func acceptGeneratedExplanation(_ text: String, basedOnAnswer: String) -> Bool {
