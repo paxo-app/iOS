@@ -49,3 +49,10 @@ Config/*.privatekey
 # scripts/measure-latency.sh 결과 (원자료는 PR에 요약만)
 latency-*.csv
 .env*
+
+# 개인 작업 산출물과 에이전트 로컬 스킬 사본
+_workspace/
+.agents/
+
+# scripts/measure-api-cost.mjs 결과 (원자료는 커밋하지 않는다)
+scripts/cost-measurement/results/

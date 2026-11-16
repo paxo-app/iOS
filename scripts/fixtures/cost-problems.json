@@ -1,0 +1,74 @@
+[
+  {
+    "id": "arithmetic",
+    "category": "사칙연산",
+    "text": "다음 식의 값으로 옳은 것은?\n\n18 ÷ 3 × 2 + (7 − 3)²\n\n① 20    ② 24    ③ 28    ④ 32    ⑤ 40",
+    "expectedAnswer": "③ 28"
+  },
+  {
+    "id": "quadratic-equation",
+    "category": "방정식",
+    "text": "이차방정식 x² − 7x + 10 = 0의 두 근을 a, b라고 한다.\n\na² + b²의 값을 구하시오.",
+    "expectedAnswer": "29"
+  },
+  {
+    "id": "conditional-probability",
+    "category": "확률",
+    "text": "주머니에 빨간 공 3개와 파란 공 2개가 있다. 공을 하나 꺼낸 뒤 다시 넣지 않고 두 번째 공을 꺼낸다.\n\n두 공 중 적어도 하나가 빨간색이라는 조건에서, 두 공이 모두 빨간색일 확률은?\n\n① 1/4    ② 1/3    ③ 2/5    ④ 1/2    ⑤ 3/5",
+    "expectedAnswer": "② 1/3"
+  },
+  {
+    "id": "calculus",
+    "category": "미적분",
+    "text": "함수 f(x) = x³ − 3x에 대하여 다음 물음에 답하시오.\n\n닫힌 구간 [−2, 2]에서 함수 |f(x)|의 정적분 값을 구하시오.\n\n즉, ∫₋₂² |x³ − 3x| dx의 값을 구하시오.",
+    "expectedAnswer": "5"
+  },
+  {
+    "id": "kinematics",
+    "category": "물리",
+    "text": "정지해 있던 자동차가 직선 도로에서 일정한 가속도 2 m/s²로 5초 동안 움직였다. 이어서 도달한 속력을 그대로 유지하며 10초 동안 더 움직였다.\n\n처음 15초 동안 자동차가 이동한 총거리는?\n\n① 75 m    ② 100 m    ③ 125 m    ④ 150 m    ⑤ 175 m",
+    "expectedAnswer": "③ 125 m"
+  },
+  {
+    "id": "chemical-reaction",
+    "category": "화학",
+    "text": "수소와 산소가 다음 반응식에 따라 완전히 반응한다.\n\n2H₂ + O₂ → 2H₂O\n\n수소 6 g과 산소 32 g을 섞어 반응시켰다. H와 O의 원자량은 각각 1과 16이다. 생성된 물의 질량과 반응 후 남은 수소의 질량을 순서대로 구하시오.",
+    "expectedAnswer": "36 g, 2 g"
+  },
+  {
+    "id": "english-reading",
+    "category": "영어 독해",
+    "text": "다음 글의 요지로 가장 적절한 것은?\n\nA small town replaced the parking spaces in front of its library with a garden and several benches. At first, some residents worried that fewer parking spaces would mean fewer visitors. Six months later, the library recorded more visits than before. People who had previously walked straight past the building now stopped to rest, noticed a display through the windows, and decided to enter. The change did not make the library's collection larger, but it made the building easier to notice and more welcoming.\n\n① 도서관의 방문자 수는 소장 도서 수로만 결정된다.\n② 주차 공간을 늘리면 모든 공공시설의 이용이 증가한다.\n③ 주변 환경을 바꾸는 것이 시설 이용을 촉진할 수 있다.\n④ 주민의 초기 반대는 공공사업 실패를 정확히 예측한다.\n⑤ 도서관은 휴식 공간보다 주차 공간을 우선해야 한다.",
+    "expectedAnswer": "③"
+  },
+  {
+    "id": "korean-reading",
+    "category": "한국어 독해",
+    "text": "다음 글의 내용과 일치하지 않는 것은?\n\n어느 연구팀은 같은 종류의 식물을 두 집단으로 나누어 4주 동안 관찰했다. 두 집단에는 같은 양의 물과 같은 종류의 흙을 제공했고, 매일 빛을 받는 시간만 다르게 했다. A 집단은 하루 6시간, B 집단은 하루 10시간 빛을 받았다. 관찰 결과 B 집단의 평균 키가 더 컸다. 연구팀은 이 결과가 해당 실험 조건에서 빛을 받는 시간과 생장 사이의 관계를 보여 준다고 설명했다. 그러나 식물의 종류나 온도가 달라졌을 때에도 같은 결과가 나오는지는 추가 실험이 필요하다고 덧붙였다.\n\n① 실험에서 식물의 종류는 두 집단이 같았다.\n② 물의 양과 흙의 종류는 두 집단에서 같게 유지했다.\n③ B 집단은 A 집단보다 하루에 4시간 더 빛을 받았다.\n④ 이 실험만으로 모든 식물과 모든 온도에서 같은 결과를 확정할 수 있다.\n⑤ 연구팀은 실험 조건이 달라지는 경우에 추가 검증이 필요하다고 보았다.",
+    "expectedAnswer": "④"
+  },
+  {
+    "id": "python-trace",
+    "category": "코드 추론",
+    "text": "다음 Python 3 코드를 실행했을 때 출력되는 값은?\n\nvalues = [1, 2, 3, 4]\ntotal = 0\nfor index, value in enumerate(values):\n    if index % 2 == 0:\n        total += value * 2\n    else:\n        total -= value\nprint(total)\n\n① −2    ② 0    ③ 2    ④ 4    ⑤ 6",
+    "expectedAnswer": "③ 2"
+  },
+  {
+    "id": "computer-science",
+    "category": "컴퓨터 과학",
+    "text": "정렬된 배열에 대한 이진 탐색의 설명 중 옳지 않은 것은?\n\n① 탐색 범위의 가운데 원소와 찾는 값을 비교한다.\n② 비교 결과에 따라 탐색 범위를 대략 절반으로 줄인다.\n③ 원소 수가 n일 때 최악의 비교 횟수는 O(log n)이다.\n④ 원소가 정렬되어 있지 않아도 항상 같은 방식으로 올바른 결과를 보장한다.\n⑤ 찾는 값이 없으면 탐색 범위가 비게 된 뒤 실패를 판정할 수 있다.",
+    "expectedAnswer": "④"
+  },
+  {
+    "id": "break-even",
+    "category": "경제 계산",
+    "text": "어느 가게의 한 달 고정비는 240,000원이다. 상품 한 개의 판매 가격은 8,000원이고, 한 개를 판매할 때마다 발생하는 변동비는 5,000원이다. 모든 상품은 같은 가격에 팔리며 다른 비용이나 세금은 없다.\n\n한 달 영업이익이 120,000원이 되려면 상품을 몇 개 판매해야 하는가?\n\n① 40개    ② 60개    ③ 80개    ④ 100개    ⑤ 120개",
+    "expectedAnswer": "⑤ 120개"
+  },
+  {
+    "id": "geometry",
+    "category": "기하",
+    "text": "직각삼각형 ABC에서 ∠A = 90°, AB = 6 cm, AC = 8 cm이다. 꼭짓점 A에서 빗변 BC에 내린 수선의 발을 H라고 한다.\n\n선분 AH의 길이를 구하시오. 소수로 나타내시오.",
+    "expectedAnswer": "4.8 cm"
+  }
+]
